@@ -111,6 +111,7 @@ IMPORTANT_AUDIT_ACTIONS = {
     "job.resume",
     "job.run_now",
     "job.metrics_toggle",
+    "job.duplicate",
 }
 
 
@@ -675,6 +676,53 @@ def run_now(request: Request, job_id: str):
 
     _audit(request, "job.run_now", tenant=tenant, target_type="job", target_id=job_id, ok=True)
     return {"ok": True}
+
+
+@router.post("/jobs/{job_id}/duplicate")
+def duplicate_job(request: Request, job_id: str):
+    _require_write(request)
+
+    j = exec_mod.scheduler.get_job(job_id)
+    if not j:
+        raise HTTPException(404, "Job not found")
+    _ensure_job_tenant(request, j)
+
+    tenant = _active_tenant(request)
+    src_cfg = dict(j.kwargs.get("config", {})) if j.kwargs else {}
+
+    try:
+        trigger = CronTrigger.from_crontab(src_cfg.get("cron", "* * * * *"), timezone=TZ)
+    except Exception as e:
+        raise HTTPException(400, f"Invalid cron: {e}")
+
+    new_id = uuid.uuid4().hex
+    new_cfg = dict(src_cfg)
+    new_cfg["id"] = new_id
+    new_cfg["name"] = f'{src_cfg.get("name", job_id)} (copy)'
+
+    # Duplicated jobs start paused so they don't run before you've had a
+    # chance to review/edit them.
+    exec_mod.scheduler.add_job(
+        exec_mod.execute_job,
+        trigger=trigger,
+        id=new_id,
+        args=[new_id],
+        kwargs={"config": new_cfg},
+        replace_existing=False,
+        next_run_time=None,
+    )
+
+    _audit(
+        request,
+        "job.duplicate",
+        tenant=tenant,
+        target_type="job",
+        target_id=new_id,
+        ok=True,
+        after=new_cfg,
+        meta={"duplicated_from": job_id},
+    )
+    return {"ok": True, "id": new_id}
 
 
 @router.post("/jobs/{job_id}/pause")
