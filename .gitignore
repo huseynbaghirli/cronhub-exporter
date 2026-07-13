@@ -11,6 +11,11 @@ venv/
 venv/**/*
 __pycache__/
 data
+
+# Local secrets - never commit
+.env
+.env.*
+!.env.example
 #*.tfvars no sensitive data in variables atm
 .idea/
 .terraform/
