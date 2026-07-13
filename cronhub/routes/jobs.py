@@ -382,12 +382,36 @@ def view_job(request: Request, job_id: str):
       const el = document.getElementById(id);
       if (!el) return;
       const text = el.innerText || el.textContent || '';
-      navigator.clipboard.writeText(text).then(() => {{
+
+      function showCopied() {{
         if (!btn) return;
         const orig = btn.textContent;
         btn.textContent = '✅ Copied';
         setTimeout(() => {{ btn.textContent = orig; }}, 1200);
-      }});
+      }}
+
+      function fallbackCopy() {{
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {{
+          document.execCommand('copy');
+          showCopied();
+        }} catch (e) {{
+          alert('Copy failed: ' + e);
+        }}
+        document.body.removeChild(ta);
+      }}
+
+      if (navigator.clipboard && window.isSecureContext) {{
+        navigator.clipboard.writeText(text).then(showCopied).catch(fallbackCopy);
+      }} else {{
+        fallbackCopy();
+      }}
     }}
   </script>
 </body>
