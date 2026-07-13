@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>CronHub</title>
   <style>
-    :root{--bg:#fff;--fg:#111827;--muted:#6b7280;--card:#fff;--line:#e5e7eb;--btn:#111827;--btnfg:#fff;--chipbg:#eef2ff;--chipfg:#4338ca}
-    :root[data-theme="dark"]{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--card:#0f172a;--line:#1f2937;--btn:#2563eb;--btnfg:#e5e7eb;--chipbg:#1e293b;--chipfg:#93c5fd}
+    :root{--bg:#fff;--fg:#111827;--muted:#6b7280;--card:#fff;--line:#e5e7eb;--btn:#111827;--btnfg:#fff;--chipbg:#eef2ff;--chipfg:#4338ca;--sliderbg:#94a3b8;--sliderok:#059669}
+    :root[data-theme="dark"]{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--card:#0f172a;--line:#1f2937;--btn:#2563eb;--btnfg:#e5e7eb;--chipbg:#1e293b;--chipfg:#93c5fd;--sliderbg:#334155;--sliderok:#10b981}
     *{box-sizing:border-box}
     body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;margin:24px;background:var(--bg);color:var(--fg)}
     .topbar{display:flex;gap:16px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:16px}
@@ -25,9 +25,9 @@
     .tag{background:var(--chipbg);color:var(--chipfg);padding:2px 8px;border-radius:999px;font-size:12px}
     .switch{position:relative;display:inline-block;width:50px;height:28px;vertical-align:middle}
     .switch input{opacity:0;width:0;height:0}
-    .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--line);transition:.2s;border-radius:9999px}
+    .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--sliderbg);transition:.2s;border-radius:9999px}
     .slider:before{position:absolute;content:"";height:22px;width:22px;left:3px;bottom:3px;background:var(--bg);transition:.2s;border-radius:50%}
-    input:checked + .slider{background:#10b981}
+    input:checked + .slider{background:var(--sliderok)}
     input:checked + .slider:before{transform:translateX(22px)}
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:50}
     .modal.show{display:flex}

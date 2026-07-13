@@ -20,7 +20,7 @@ router = APIRouter()
 DEFAULT_TENANT = "business"
 
 LABEL_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-RESERVED_LABEL_KEYS = {"job_id", "job_name", "tenant", "subjob", "list"}
+RESERVED_LABEL_KEYS = {"job_id", "job_name", "tenant", "folder", "subjob", "list"}
 
 
 def _parse_extra_labels(text: str | None) -> dict[str, str]:
@@ -725,6 +725,7 @@ def metrics():
 
         name = cfg.get("name", job_id)
         tenant = cfg.get("tenant", DEFAULT_TENANT)
+        folder = cfg.get("folder") or ""
 
         last = _get_last(tenant, job_id)
         if not last:
@@ -734,7 +735,11 @@ def metrics():
         extra_labels_str = "".join(
             f',{k}="{exec_mod._esc(str(v))}"' for k, v in extra_labels.items()
         )
-        base_labels = f'job_id="{job_id}",job_name="{exec_mod._esc(name)}",tenant="{exec_mod._esc(str(tenant))}"{extra_labels_str}'
+        base_labels = (
+            f'job_id="{job_id}",job_name="{exec_mod._esc(name)}",'
+            f'tenant="{exec_mod._esc(str(tenant))}",folder="{exec_mod._esc(str(folder))}"'
+            f'{extra_labels_str}'
+        )
 
         success = 0 if last.get("error") else 1
         lines.append(f"cronhub_job_success{{{base_labels}}} {success}")
