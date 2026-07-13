@@ -16,9 +16,10 @@ RUN apt-get install -y redis-tools openssh-client
 
 # --- Oracle Instant Client (sqlplus) ---
 ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
-ENV LD_LIBRARY_PATH=${ORACLE_HOME}:${LD_LIBRARY_PATH}
+ENV LD_LIBRARY_PATH=${ORACLE_HOME}
 ENV PATH=${ORACLE_HOME}:${PATH}
-RUN apt-get install -y libaio1 unzip \
+RUN (apt-get install -y libaio1t64 || apt-get install -y libaio1) \
+    && apt-get install -y unzip \
     && mkdir -p /opt/oracle \
     && curl -fsSL -o /tmp/instantclient-basiclite.zip \
         https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-basiclite-linux.x64-21.13.0.0.0dbru.zip \
