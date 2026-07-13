@@ -1,0 +1,168 @@
+<!doctype html>
+<html data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CronHub — Job View</title>
+  <style>
+    :root{--bg:#fff;--fg:#111827;--muted:#6b7280;--card:#fff;--line:#e5e7eb;--btn:#111827;--btnfg:#fff;--chipbg:#eef2ff;--chipfg:#4338ca;--codebg:#f8fafc}
+    :root[data-theme="dark"]{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--card:#0f172a;--line:#1f2937;--btn:#2563eb;--btnfg:#e5e7eb;--chipbg:#1e293b;--chipfg:#93c5fd;--codebg:#0b1220}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;margin:24px;background:var(--bg);color:var(--fg)}
+    a{color:inherit;text-decoration:none}
+    .topbar{display:flex;gap:16px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+    .right{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .iconbtn{background:transparent;border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:8px 12px;cursor:pointer}
+    .card{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:16px;margin-bottom:16px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .kv{flex:1;min-width:220px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+    .val{font-weight:600}
+    .tag{display:inline-block;background:var(--chipbg);color:var(--chipfg);padding:2px 8px;border-radius:999px;font-size:12px}
+    pre,code{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,"Liberation Mono","Courier New", monospace}
+    pre{background:var(--codebg);border:1px solid var(--line);border-radius:10px;padding:12px;overflow:auto;white-space:pre-wrap;word-break:break-word}
+    .muted{color:var(--muted);font-size:12px}
+    .themeToggle{display:flex;align-items:center;gap:8px}
+    .themeToggle .icon{font-size:18px;line-height:1}
+    .grid2{display:grid;grid-template-columns:1fr;gap:12px}
+    @media (min-width: 980px){ .grid2{grid-template-columns:1fr 1fr} }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:10px;">
+      <a class="iconbtn" href="/" title="Back to Jobs">← Back</a>
+      <h2 style="margin:0">Job View</h2>
+    </div>
+
+    <div class="right">
+      <button id="themeToggle" class="iconbtn themeToggle" aria-label="Toggle theme" type="button">
+        <span id="themeIcon" class="icon">🌙</span><span id="themeText">Dark</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="align-items:center;justify-content:space-between;">
+      <div>
+        <div class="muted">Name</div>
+        <div class="val" id="jName">-</div>
+        <div class="muted" id="jDesc" style="margin-top:6px;"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <span class="tag" id="jType">type</span>
+        <span class="tag" id="jCron">cron</span>
+        <span class="tag" id="jTenant">tenant</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h3 style="margin:0 0 10px 0;">Runtime</h3>
+      <div class="row">
+        <div class="kv"><label>Paused</label><div class="val" id="jPaused">-</div></div>
+        <div class="kv"><label>Timeout</label><div class="val" id="jTimeout">-</div></div>
+        <div class="kv"><label>Retention days</label><div class="val" id="jRetention">-</div></div>
+        <div class="kv"><label>Metrics</label><div class="val" id="jMetrics">-</div></div>
+        <div class="kv"><label>Value Regex</label><div class="val"><code id="jRegex">-</code></div></div>
+      </div>
+      <div style="margin-top:10px" class="muted">
+        Last run: <span id="jLastTs">-</span> • Last value: <span id="jLastVal">-</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin:0 0 10px 0;">HTTP Config</h3>
+      <div class="row">
+        <div class="kv"><label>Method</label><div class="val" id="jMethod">-</div></div>
+        <div class="kv"><label>URL</label><div class="val" id="jUrl">-</div></div>
+      </div>
+      <label style="margin-top:10px;">Headers</label>
+      <pre id="jHeaders">-</pre>
+      <label style="margin-top:10px;">Body</label>
+      <pre id="jBody">-</pre>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3 style="margin:0 0 10px 0;">Shell Command</h3>
+    <pre id="jCommand">-</pre>
+  </div>
+
+  <script>
+    // THEME (same logic as index)
+    const root = document.documentElement;
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+    const themeText = document.getElementById('themeText');
+
+    function applyTheme(t){
+      root.setAttribute('data-theme', t);
+      localStorage.setItem('theme', t);
+      if(t === 'dark'){ themeIcon.textContent='☀️'; themeText.textContent='Light'; }
+      else { themeIcon.textContent='🌙'; themeText.textContent='Dark'; }
+    }
+    applyTheme(localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+    themeToggle.addEventListener('click', () => applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+
+    function esc(v){
+      v = (v ?? '').toString();
+      return v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    function tsToStr(ts){
+      if(!ts) return '-';
+      try { return new Date(ts*1000).toLocaleString(); } catch(e){ return String(ts); }
+    }
+
+    // JOB DATA injected by backend
+    const JOB = window.__JOB__ || null;
+
+    function fill(){
+      if(!JOB){
+        document.getElementById('jName').textContent = 'Job not found';
+        return;
+      }
+
+      document.getElementById('jName').textContent = JOB.name || JOB.id || '-';
+      document.getElementById('jDesc').textContent = JOB.description ? JOB.description : '';
+      document.getElementById('jType').textContent = JOB.type || '-';
+      document.getElementById('jCron').textContent = JOB.cron || '-';
+      document.getElementById('jTenant').textContent = (JOB.tenant || 'tenant');
+
+      document.getElementById('jPaused').textContent = JOB.paused ? 'Yes' : 'No';
+      document.getElementById('jTimeout').textContent = (JOB.timeout ?? '-') + '';
+      document.getElementById('jRetention').textContent = (JOB.retention_days ?? 1) + '';
+      const me = !!(JOB.metrics_enabled ?? (JOB.config && JOB.config.metrics_enabled));
+      document.getElementById('jMetrics').textContent = me ? 'Enabled' : 'Disabled';
+      document.getElementById('jRegex').textContent = JOB.value_regex || '-';
+
+      document.getElementById('jLastTs').textContent = JOB.last?.ts ? tsToStr(JOB.last.ts) : '-';
+      document.getElementById('jLastVal').textContent = (JOB.last && JOB.last.value != null) ? String(JOB.last.value) : '-';
+
+      // HTTP
+      document.getElementById('jMethod').textContent = JOB.method || '-';
+      document.getElementById('jUrl').textContent = JOB.url || '-';
+      document.getElementById('jHeaders').innerHTML = esc(JOB.headers || '-');
+      document.getElementById('jBody').innerHTML = esc(JOB.body || '-');
+
+      // Shell
+      document.getElementById('jCommand').innerHTML = esc(JOB.command || '-');
+
+      // show relevant blocks based on type
+      const isHttp = (JOB.type === 'http');
+      document.querySelector('h3 + .row') // noop
+      if(isHttp){
+        // hide shell card
+        document.getElementById('jCommand').parentElement.style.display = 'none';
+      } else {
+        // hide http card
+        document.getElementById('jMethod').closest('.card').style.display = 'none';
+      }
+    }
+    fill();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!doctype html>
+<html data-theme="light">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CronHub — Login</title>
+<style>
+:root{ --bg:#ffffff; --fg:#111827; --muted:#6b7280; --line:#e5e7eb; --btn:#111827; --btnfg:#ffffff; }
+body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;margin:24px;background:var(--bg);color:var(--fg)}
+.card{max-width:460px;margin:10vh auto;border:1px solid var(--line);border-radius:12px;padding:16px}
+h2{margin:0 0 12px 0}
+label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+input{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:14px}
+button{margin-top:12px;width:100%;padding:10px;border-radius:10px;border:0;background:var(--btn);color:var(--btnfg);cursor:pointer}
+.sep{margin:14px 0;border-top:1px solid var(--line)}
+.hint{font-size:12px;color:var(--muted);margin-top:8px}
+.err{color:#dc2626;margin-top:8px;font-size:13px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <h2>CronHub — Login</h2>
+
+    <!-- Keycloak SSO -->
+    <form method="post" action="/login" onsubmit="this.querySelector('button').disabled=true;">
+      <input type="hidden" name="action" value="sso" />
+      <button type="submit">Sign in with Keycloak</button>
+      {SSO_BLOCK}
+    </form>
+
+    <div class="sep"></div>
+
+    <!-- Local admin fallback -->
+    <form method="post" action="/login">
+      <input type="hidden" name="action" value="local" />
+      <div style="margin-bottom:10px">
+        <label>Local Admin Username</label>
+        <input name="username" required />
+      </div>
+      <div style="margin-bottom:10px">
+        <label>Local Admin Password</label>
+        <input type="password" name="password" required />
+      </div>
+      <button type="submit">Sign in (Local Admin)</button>
+      {ERROR_BLOCK}
+    </form>
+  </div>
+</body>
+</html>

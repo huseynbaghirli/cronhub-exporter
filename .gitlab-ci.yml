@@ -1,0 +1,24 @@
+############################################################################
+include:  
+  - project: 'iac/cd-scripts'
+    ref: main
+    file: 'release.yml' 
+  - project: 'iac/cd-scripts'
+    ref: main
+    file: 'build.yml'
+  - project: 'iac/cd-scripts'
+    ref: main
+    file: 'deploy.yml'
+  - project: 'iac/cd-scripts'
+    ref: main
+    file: 'rollback.yml'        
+############################################################################
+stages:
+  - release
+  - build
+  - deploy
+  - rollback
+############################################################################
+variables:
+  PROJECT_NAME: $CI_PROJECT_NAME
+############################################################################

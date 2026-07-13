@@ -1,0 +1,966 @@
+<!doctype html>
+<html data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CronHub</title>
+  <style>
+    :root{--bg:#fff;--fg:#111827;--muted:#6b7280;--card:#fff;--line:#e5e7eb;--btn:#111827;--btnfg:#fff;--chipbg:#eef2ff;--chipfg:#4338ca}
+    :root[data-theme="dark"]{--bg:#0b1220;--fg:#e5e7eb;--muted:#9ca3af;--card:#0f172a;--line:#1f2937;--btn:#2563eb;--btnfg:#e5e7eb;--chipbg:#1e293b;--chipfg:#93c5fd}
+    *{box-sizing:border-box}
+    body{font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial;margin:24px;background:var(--bg);color:var(--fg)}
+    .topbar{display:flex;gap:16px;justify-content:space-between;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+    .topbar-right{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+    .clock{font-variant-numeric:tabular-nums;font-weight:600}
+    .card{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:16px;margin-bottom:16px}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+    input,select,textarea{width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:14px;background:var(--bg);color:var(--fg)}
+    textarea{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+    button{padding:8px 14px;border-radius:10px;border:0;background:var(--btn);color:var(--btnfg);cursor:pointer}
+    .iconbtn{background:transparent;border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:8px 12px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{padding:8px;border-bottom:1px solid var(--line);font-size:14px;text-align:left}
+    .muted{color:var(--muted);font-size:12px}
+    .tag{background:var(--chipbg);color:var(--chipfg);padding:2px 8px;border-radius:999px;font-size:12px}
+    .switch{position:relative;display:inline-block;width:50px;height:28px;vertical-align:middle}
+    .switch input{opacity:0;width:0;height:0}
+    .slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:var(--line);transition:.2s;border-radius:9999px}
+    .slider:before{position:absolute;content:"";height:22px;width:22px;left:3px;bottom:3px;background:var(--bg);transition:.2s;border-radius:50%}
+    input:checked + .slider{background:#10b981}
+    input:checked + .slider:before{transform:translateX(22px)}
+    .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:50}
+    .modal.show{display:flex}
+    .modal-card{width:min(980px,94vw);background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+    .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+    .tabs{display:flex;gap:8px;margin-bottom:12px}
+    .tab{padding:6px 10px;border:1px solid var(--line);border-radius:999px;background:transparent;cursor:pointer}
+    .tab.active{background:var(--btn);color:var(--btnfg);border-color:var(--btn)}
+    .canvas-wrap{border:1px solid var(--line);border-radius:8px;padding:8px}
+    .themeToggle{display:flex;align-items:center;gap:8px;cursor:pointer}
+    .themeToggle .icon{font-size:18px;line-height:1}
+    .userbox{display:flex;align-items:center;gap:10px}
+    .tenantbox{display:flex;align-items:center;gap:10px;padding:6px 10px;border:1px solid var(--line);border-radius:12px;background:transparent}
+    .tenantbox .lbl{font-size:12px;color:var(--muted);white-space:nowrap}
+    .tenantbox select{width:auto;min-width:140px}
+
+    .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+    .card-head h3{margin:0}
+    .collapse{overflow:hidden;max-height:0;opacity:0;transition:max-height .22s ease,opacity .18s ease}
+    .collapse.open{max-height:2200px;opacity:1}
+    .togglebtn{display:flex;align-items:center;gap:8px;user-select:none}
+    .togglebtn .chev{display:inline-block;transition:transform .2s ease}
+    .togglebtn[aria-expanded="true"] .chev{transform:rotate(90deg)}
+  </style>
+</head>
+
+<body>
+  <div class="topbar">
+    <h1 style="margin:0">CronHub</h1>
+    <div class="topbar-right">
+      <div class="clock">Time: <span id="clock">--:--:--</span></div>
+
+      <div class="tenantbox" id="tenantBox">
+        <span class="lbl">Tenant</span>
+        <select id="tenantSel"></select>
+      </div>
+
+      <div class="userbox">
+        <span class="muted">Signed in as <strong id="whoami">...</strong></span>
+        <a class="iconbtn" href="/logout" title="Logout">Logout</a>
+      </div>
+
+      <button id="btnAudit" class="iconbtn" type="button" onclick="openAudit()" title="Audit" style="display:none">🧾 Audit</button>
+
+      <button id="themeToggle" class="iconbtn themeToggle" aria-label="Toggle theme" title="Toggle dark mode" type="button">
+        <span id="themeIcon" class="icon">🌙</span><span id="themeText">Dark</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- CREATE JOB (collapsed) -->
+  <div class="card" id="createCard">
+    <div class="card-head">
+      <h3>Create Job</h3>
+      <button id="createToggle" class="iconbtn togglebtn" type="button" aria-expanded="false">
+        <span class="chev">▶</span>
+        <span id="createToggleText">New Job</span>
+      </button>
+    </div>
+
+    <div id="createWrap" class="collapse">
+      <form id="jobForm">
+        <div class="row">
+          <div style="flex:1;min-width:200px">
+            <label>Name</label>
+            <input name="name" placeholder="sql-count" required />
+          </div>
+
+          <div style="flex:2;min-width:220px">
+            <label>Description (max 100)</label>
+            <input name="description" maxlength="100" placeholder="Optional description" />
+          </div>
+
+          <div style="flex:1;min-width:200px">
+            <label>Folder</label>
+            <input name="folder" placeholder="e.g. Payments/Reports" />
+            <div class="muted">Folder logic: nested like Payments/Reports</div>
+          </div>
+
+          <div style="flex:1;min-width:200px">
+            <label>Cron</label>
+            <input name="cron" placeholder="* * * * *" required />
+            <div class="muted">minute hour day month weekday</div>
+          </div>
+
+          <div style="flex:1;min-width:140px">
+            <label>Type</label>
+            <select name="type" id="type">
+              <option value="shell">Shell</option>
+              <option value="http">HTTP</option>
+            </select>
+          </div>
+
+          <div style="flex:1;min-width:220px">
+            <label>Value Regex (optional)</label>
+            <input name="value_regex" placeholder="(?P<value>\\d+)" />
+          </div>
+
+          <div style="width:160px">
+            <label>History Retention (days)</label>
+            <input name="retention_days" value="1" />
+          </div>
+
+          <div style="width:170px">
+            <label>Expose Metrics</label>
+            <label class="switch" title="Expose">
+              <input type="checkbox" name="metrics_enabled" value="1">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div id="shellFields" class="row" style="margin-top:8px">
+          <div style="flex:1;min-width:420px">
+            <label>Command (multi-line script)</label>
+            <textarea name="command" rows="6" placeholder=$'echo 123'></textarea>
+          </div>
+          <div style="width:140px">
+            <label>Timeout (s)</label>
+            <input name="timeout" value="3600" />
+          </div>
+        </div>
+
+        <div id="httpFields" class="row" style="display:none;margin-top:8px">
+          <div style="width:120px">
+            <label>Method</label>
+            <select name="method">
+              <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
+            </select>
+          </div>
+          <div style="flex:1;min-width:260px">
+            <label>URL</label>
+            <input name="url" placeholder="https://example/api" />
+          </div>
+          <div style="flex:1;min-width:220px">
+            <label>Headers (JSON or key: value)</label>
+            <textarea name="headers" rows="3" placeholder='{"Authorization":"Bearer ..."}'></textarea>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <label>Body</label>
+            <textarea name="body" rows="3" placeholder='{"k":"v"}'></textarea>
+          </div>
+          <div style="width:140px">
+            <label>Timeout (s)</label>
+            <input name="timeout" value="60" />
+          </div>
+        </div>
+
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <button id="btnCreate" type="submit">Add</button>
+          <span id="roHintCreate" class="muted" style="display:none">Read-only: create disabled</span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h3>Jobs</h3>
+      <button type="button" onclick="reloadJobs()">Refresh</button>
+    </div>
+
+    <table id="jobsTbl">
+      <thead>
+        <tr>
+          <th>Folder</th><th>Name</th><th>Description</th><th>Type</th><th>Cron</th><th>Retention</th>
+          <th>Last Value</th><th>Last Time</th><th>On/Off</th><th>Metrics</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+
+    <div class="muted">Prometheus endpoint: <code>/metrics</code></div>
+  </div>
+
+  <!-- EDIT MODAL -->
+  <div id="editModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 style="margin:0">Edit Job</h3>
+        <button class="iconbtn" type="button" onclick="closeEdit()" title="Close">✖</button>
+      </div>
+
+      <form id="editForm">
+        <input type="hidden" id="editId" />
+        <div class="row">
+          <div style="flex:1;min-width:200px">
+            <label>Name</label>
+            <input id="editName" required />
+          </div>
+
+          <div style="flex:2;min-width:220px">
+            <label>Description (max 100)</label>
+            <input id="editDesc" maxlength="100" />
+          </div>
+
+          <div style="flex:1;min-width:200px">
+            <label>Folder</label>
+            <input id="editFolder" />
+          </div>
+
+          <div style="flex:1;min-width:200px">
+            <label>Cron</label>
+            <input id="editCron" placeholder="* * * * *" required />
+          </div>
+
+          <div style="flex:1;min-width:140px">
+            <label>Type</label>
+            <select id="editType">
+              <option value="shell">Shell</option>
+              <option value="http">HTTP</option>
+            </select>
+          </div>
+
+          <div style="flex:1;min-width:220px">
+            <label>Value Regex</label>
+            <input id="editRegex" placeholder="(?P<value>\\d+)" />
+          </div>
+
+          <div style="width:140px">
+            <label>Timeout (s)</label>
+            <input id="editTimeout" />
+          </div>
+
+          <div style="width:160px">
+            <label>History Retention (days)</label>
+            <input id="editRetention" />
+          </div>
+
+          <div style="width:170px">
+            <label>Expose Metrics</label>
+            <label class="switch" title="Expose">
+              <input type="checkbox" id="editMetrics" value="1">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div id="editShell" class="row" style="margin-top:8px">
+          <div style="flex:1;min-width:420px">
+            <label>Command (multi-line script)</label>
+            <textarea id="editCommand" rows="6"></textarea>
+          </div>
+        </div>
+
+        <div id="editHTTP" class="row" style="display:none;margin-top:8px">
+          <div style="width:120px">
+            <label>Method</label>
+            <select id="editMethod"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+          </div>
+          <div style="flex:1;min-width:260px">
+            <label>URL</label>
+            <input id="editUrl" />
+          </div>
+          <div style="flex:1;min-width:220px">
+            <label>Headers (JSON or key: value)</label>
+            <textarea id="editHeaders" rows="3"></textarea>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <label>Body</label>
+            <textarea id="editBody" rows="3"></textarea>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="iconbtn" type="button" onclick="closeEdit()">Cancel</button>
+          <button type="submit">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- HISTORY MODAL -->
+  <div id="historyModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="historyTitle" style="margin:0">History</h3>
+        <button class="iconbtn" type="button" onclick="closeHistory()" title="Close">✖</button>
+      </div>
+      <div class="tabs">
+        <button id="tabTable" class="tab active" type="button" onclick="setHistTab('table')">Table</button>
+        <button id="tabChart" class="tab" type="button" onclick="setHistTab('chart')">Chart</button>
+      </div>
+      <div id="histTableWrap">
+        <table id="histTbl" style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid var(--line)">Time</th>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid var(--line)">Value</th>
+              <th style="text-align:left;padding:6px;border-bottom:1px solid var(--line)">Output (preview)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+
+        <div class="row" id="histPager" style="align-items:center;justify-content:space-between;margin-top:10px;display:none">
+          <div class="muted" id="histPagerInfo">0 items</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="iconbtn" type="button" id="histPrev">← Prev</button>
+            <span class="muted" id="histPageLabel">1 / 1</span>
+            <button class="iconbtn" type="button" id="histNext">Next →</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="histChartWrap" class="canvas-wrap" style="display:none">
+        <canvas id="histCanvas" width="900" height="320"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- AUDIT MODAL -->
+  <div id="auditModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 style="margin:0">Audit</h3>
+        <button class="iconbtn" type="button" onclick="closeAudit()" title="Close">✖</button>
+      </div>
+
+      <div class="row" style="align-items:end;margin-bottom:10px">
+        <div style="flex:1;min-width:220px">
+          <label>Filter (actor / action / job id)</label>
+          <input id="auditFilter" placeholder="e.g. job.delete or cron-123 or Abbas" />
+        </div>
+        <div style="width:160px">
+          <label>Per page</label>
+          <input id="auditLimit" value="10" />
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="iconbtn" type="button" onclick="reloadAudit()">Refresh</button>
+        </div>
+      </div>
+
+      <table id="auditTbl">
+        <thead>
+          <tr>
+            <th>Time</th><th>Actor</th><th>Action</th><th>Target</th><th>OK</th><th>Message</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+
+      <div class="row" id="auditPager" style="align-items:center;justify-content:space-between;margin-top:10px;display:none">
+        <div class="muted" id="auditPagerInfo">0 items</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="iconbtn" type="button" id="auditPrev">← Prev</button>
+          <span class="muted" id="auditPageLabel">1 / 1</span>
+          <button class="iconbtn" type="button" id="auditNext">Next →</button>
+        </div>
+      </div>
+
+      <div class="muted" style="margin-top:8px">Showing audit events for current tenant.</div>
+    </div>
+  </div>
+
+  <script>
+    // role flags
+    let ROLE = '';
+    let CAN_WRITE = false;
+    let CAN_AUDIT = false;
+
+    /* THEME */
+    const root = document.documentElement;
+    const themeToggle = document.getElementById('themeToggle');
+    const themeIcon = document.getElementById('themeIcon');
+    const themeText = document.getElementById('themeText');
+
+    function applyTheme(t){
+      root.setAttribute('data-theme', t);
+      localStorage.setItem('theme', t);
+      if(t === 'dark'){ themeIcon.textContent='☀️'; themeText.textContent='Light'; }
+      else { themeIcon.textContent='🌙'; themeText.textContent='Dark'; }
+    }
+    applyTheme(localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+    themeToggle.addEventListener('click', () => applyTheme(root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'));
+
+    /* CLOCK */
+    function updateClock(){
+      document.getElementById('clock').textContent = new Date().toLocaleTimeString([], {hour12:false});
+    }
+    updateClock(); setInterval(updateClock, 1000);
+
+    /* CREATE JOB COLLAPSE */
+    const createToggle = document.getElementById('createToggle');
+    const createWrap = document.getElementById('createWrap');
+    const createToggleText = document.getElementById('createToggleText');
+
+    function setCreateOpen(open){
+      if(!createWrap || !createToggle) return;
+      createWrap.classList.toggle('open', open);
+      createToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if(createToggleText) createToggleText.textContent = open ? 'Close' : 'New Job';
+      localStorage.setItem('create_open', open ? '1' : '0');
+    }
+    setCreateOpen(localStorage.getItem('create_open') === '1');
+    createToggle.addEventListener('click', () => setCreateOpen(!createWrap.classList.contains('open')));
+
+    /* FORM TOGGLES */
+    const typeSel = document.getElementById('type');
+    const shellFields = document.getElementById('shellFields');
+    const httpFields = document.getElementById('httpFields');
+    function toggleFields(){
+      if(typeSel.value === 'shell'){ shellFields.style.display='flex'; httpFields.style.display='none'; }
+      else { shellFields.style.display='none'; httpFields.style.display='flex'; }
+    }
+    typeSel.addEventListener('change', toggleFields);
+    toggleFields();
+
+    /* CREATE JOB */
+    document.getElementById('jobForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      if(!CAN_WRITE){
+        alert('Read-only user');
+        return;
+      }
+      const fd = new FormData(e.target);
+      const r = await fetch('/jobs', { method:'POST', body: fd });
+      if(!r.ok){ alert('Failed to create job: '+await r.text()); return; }
+      e.target.reset(); toggleFields(); reloadJobs();
+      setCreateOpen(false);
+    });
+
+    /* JOBS TABLE */
+    async function reloadJobs(){
+      const r = await fetch('/jobs');
+      if(!r.ok){ alert('Failed to load jobs: ' + await r.text()); return; }
+      const data = await r.json();
+      const tb = document.querySelector('#jobsTbl tbody');
+      tb.innerHTML='';
+
+      // folder -> list
+      const folders = {};
+      for(const j of data){
+        const f = (j.folder || '').trim() || '(no folder)';
+        if(!folders[f]) folders[f] = [];
+        folders[f].push(j);
+      }
+
+      const folderNames = Object.keys(folders).sort((a,b)=>a.localeCompare(b));
+      for(const fname of folderNames){
+        const group = folders[fname];
+
+        // ✅ folder daxilində jobları A→Z sırala (adına görə)
+        group.sort((a,b) => (a.name || '').localeCompare((b.name || ''), undefined, {
+          sensitivity: 'base',  // böyük/kiçik hərf fərq etməsin
+          numeric: true         // 2 < 10 kimi düzgün sıralasın
+        }));
+
+        // folder header row
+        const hdr = document.createElement('tr');
+        hdr.innerHTML = `
+          <td colspan="11" style="font-weight:700;cursor:pointer">
+            <span class="tag">📁</span> ${fname}
+            <span class="muted" style="margin-left:8px">(${group.length})</span>
+          </td>`;
+        tb.appendChild(hdr);
+
+        let open = localStorage.getItem('folder_open_'+fname) !== '0';
+        const children = [];
+
+        hdr.onclick = () => {
+          open = !open;
+          localStorage.setItem('folder_open_'+fname, open ? '1' : '0');
+          for(const tr of children) tr.style.display = open ? '' : 'none';
+        };
+
+        for(const j of group){
+          const tr = document.createElement('tr');
+          const dFull = (j.description || '');
+          const dShort = dFull.slice(0,30);
+          const dTitle = dFull.replaceAll('"','&quot;');
+
+          const metricsEnabled = !!(j.metrics_enabled ?? (j.config && j.config.metrics_enabled));
+
+          const lastVal = (j.last && j.last.value != null) ? j.last.value : '';
+          const lastTs = (j.last && j.last.ts) ? new Date(j.last.ts*1000).toLocaleString() : '';
+
+          const viewBtn = `<button type="button" onclick="openView('${j.id}')">View</button>`;
+          const histBtn = `<button type="button" onclick="openHistory('${j.id}','${(j.name||j.id).replaceAll('"','&quot;')}')">History</button>`;
+
+          let actionsHtml = `${viewBtn} ${histBtn}`;
+          if(CAN_WRITE){
+            actionsHtml += `
+              <button type="button" onclick="runNow('${j.id}')">Run Now</button>
+              <button type="button" onclick="openEdit('${j.id}')">Edit</button>
+              <button type="button" onclick="delJob('${j.id}')">Delete</button>
+            `;
+          }
+
+          const onoff = CAN_WRITE
+            ? `<label class="switch" title="${j.paused ? 'Off' : 'On'}">
+                 <input type="checkbox" ${j.paused ? '' : 'checked'} onchange="toggleJob('${j.id}', this.checked)">
+                 <span class="slider"></span>
+               </label>`
+            : `<span class="tag">${j.paused ? 'OFF' : 'ON'}</span>`;
+
+          const metsw = CAN_WRITE
+            ? `<label class="switch" title="${metricsEnabled ? 'Metrics enabled' : 'Metrics disabled'}">
+                 <input type="checkbox" ${metricsEnabled ? 'checked' : ''} onchange="toggleMetrics('${j.id}', this.checked)">
+                 <span class="slider"></span>
+               </label>`
+            : `<span class="tag">${metricsEnabled ? 'ON' : 'OFF'}</span>`;
+
+          tr.innerHTML = `
+            <td>${(j.folder||'')}</td>
+            <td>${j.name}</td>
+            <td><span title="${dTitle}">${dShort}</span></td>
+            <td><span class="tag">${j.type}</span></td>
+            <td>${j.cron}</td>
+            <td>${j.retention_days ?? 1}</td>
+            <td>${lastVal}</td>
+            <td>${lastTs}</td>
+            <td>${onoff}</td>
+            <td>${metsw}</td>
+            <td>${actionsHtml}</td>`;
+          tb.appendChild(tr);
+          children.push(tr);
+          tr.style.display = open ? '' : 'none';
+        }
+      }
+    }
+
+    function openView(id){
+      window.location.href = `/jobs/${id}/view`;
+    }
+
+    async function toggleJob(id, enabled){
+      if(!CAN_WRITE) return;
+      await fetch(`/jobs/${id}/${enabled ? 'resume' : 'pause'}`, {method:'POST'});
+      setTimeout(reloadJobs, 250);
+    }
+    async function runNow(id){
+      if(!CAN_WRITE) return;
+      await fetch(`/jobs/${id}/run`, {method:'POST'});
+      setTimeout(reloadJobs, 800);
+    }
+    async function delJob(id){
+      if(!CAN_WRITE) return;
+      if(confirm('Delete this job?')){
+        await fetch(`/jobs/${id}`, {method:'DELETE'});
+        reloadJobs();
+      }
+    }
+    async function toggleMetrics(id, enabled){
+      if(!CAN_WRITE) return;
+      const state = enabled ? 'on' : 'off';
+      const r = await fetch(`/jobs/${id}/metrics/${state}`, { method:'POST' });
+      if(!r.ok) alert('Metrics toggle failed: ' + await r.text());
+      setTimeout(reloadJobs, 250);
+    }
+
+    /* EDIT MODAL */
+    let editingId = null;
+    const editModal = document.getElementById('editModal');
+    const editType  = document.getElementById('editType');
+    const editShell = document.getElementById('editShell');
+    const editHTTP  = document.getElementById('editHTTP');
+
+    function toggleEditType(){
+      if(editType.value === 'shell'){ editShell.style.display='flex'; editHTTP.style.display='none'; }
+      else { editShell.style.display='none'; editHTTP.style.display='flex'; }
+    }
+    editType.addEventListener('change', toggleEditType);
+
+    async function openEdit(id){
+      if(!CAN_WRITE) return;
+      const r = await fetch(`/jobs/${id}`);
+      if(!r.ok){ alert('Job not found'); return; }
+      const j = await r.json();
+
+      editingId = id;
+      document.getElementById('editId').value = id;
+      document.getElementById('editName').value = j.name || '';
+      document.getElementById('editDesc').value = j.description || '';
+      document.getElementById('editFolder').value = j.folder || '';
+      document.getElementById('editCron').value = j.cron || '';
+      document.getElementById('editTimeout').value = j.timeout || '';
+      document.getElementById('editRegex').value = j.value_regex || '';
+      document.getElementById('editRetention').value = j.retention_days ?? 1;
+
+      editType.value = j.type || 'shell';
+      document.getElementById('editCommand').value = j.command || '';
+      document.getElementById('editMethod').value  = j.method || 'GET';
+      document.getElementById('editUrl').value     = j.url || '';
+      document.getElementById('editHeaders').value = j.headers || '';
+      document.getElementById('editBody').value    = j.body || '';
+      document.getElementById('editMetrics').checked = !!(j.metrics_enabled ?? (j.config && j.config.metrics_enabled));
+
+      toggleEditType();
+      editModal.classList.add('show');
+    }
+    function closeEdit(){ editModal.classList.remove('show'); editingId = null; }
+
+    document.getElementById('editForm').addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      if(!editingId || !CAN_WRITE) return;
+
+      const fd = new FormData();
+      fd.append('name', document.getElementById('editName').value.trim());
+      fd.append('description', document.getElementById('editDesc').value.trim());
+      fd.append('folder', document.getElementById('editFolder').value.trim());
+      fd.append('cron', document.getElementById('editCron').value.trim());
+      fd.append('type', document.getElementById('editType').value.trim());
+      const t = document.getElementById('editTimeout').value.trim();
+      if(t) fd.append('timeout', t);
+      fd.append('value_regex', document.getElementById('editRegex').value);
+      fd.append('retention_days', document.getElementById('editRetention').value || '1');
+      fd.append('metrics_enabled', document.getElementById('editMetrics').checked ? '1' : '0');
+
+      if(document.getElementById('editType').value === 'shell'){
+        fd.append('command', document.getElementById('editCommand').value);
+      } else {
+        fd.append('method', document.getElementById('editMethod').value);
+        fd.append('url', document.getElementById('editUrl').value);
+        fd.append('headers', document.getElementById('editHeaders').value);
+        fd.append('body', document.getElementById('editBody').value);
+      }
+
+      const up = await fetch(`/jobs/${editingId}`, { method:'PUT', body: fd });
+      if(!up.ok){ alert('Update failed: '+await up.text()); return; }
+      closeEdit();
+      reloadJobs();
+    });
+
+    /* HISTORY MODAL (same as before) */
+    let histJobId = null;
+    const historyModal = document.getElementById('historyModal');
+    const histTblBody = document.querySelector('#histTbl tbody');
+    const histCanvas = document.getElementById('histCanvas');
+    const histCtx = histCanvas.getContext('2d');
+
+    const HIST_PAGE_SIZE = 10;
+    const HIST_FETCH_LIMIT = 1000;
+    let histAll = [];
+    let histPage = 1;
+
+    const histPager = document.getElementById('histPager');
+    const histPagerInfo = document.getElementById('histPagerInfo');
+    const histPrev = document.getElementById('histPrev');
+    const histNext = document.getElementById('histNext');
+    const histPageLabel = document.getElementById('histPageLabel');
+
+    function renderHistPage(){
+      const total = histAll.length;
+      const totalPages = Math.max(1, Math.ceil(total / HIST_PAGE_SIZE));
+      histPage = Math.max(1, Math.min(histPage, totalPages));
+
+      const start = (histPage - 1) * HIST_PAGE_SIZE;
+      const pageItems = histAll.slice(start, start + HIST_PAGE_SIZE);
+
+      histTblBody.innerHTML = '';
+      for(const it of pageItems){
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td style="padding:6px;border-bottom:1px solid var(--line)">${new Date(it.ts*1000).toLocaleString()}</td>
+                        <td style="padding:6px;border-bottom:1px solid var(--line)">${it.value}</td>
+                        <td style="padding:6px;border-bottom:1px solid var(--line)">${(it.output||'').slice(0,140)}</td>`;
+        histTblBody.appendChild(tr);
+      }
+      if(pageItems.length === 0){
+        histTblBody.innerHTML = `<tr><td colspan="3" style="padding:6px">No history yet</td></tr>`;
+      }
+
+      if(histPager){
+        histPager.style.display = 'flex';
+        if(histPagerInfo){
+          const from = total === 0 ? 0 : (start + 1);
+          const to = Math.min(start + HIST_PAGE_SIZE, total);
+          histPagerInfo.textContent = `${total} items • showing ${from}-${to} • per page ${HIST_PAGE_SIZE}`;
+        }
+        if(histPageLabel) histPageLabel.textContent = `${histPage} / ${totalPages}`;
+        if(histPrev) histPrev.disabled = (histPage <= 1);
+        if(histNext) histNext.disabled = (histPage >= totalPages);
+      }
+    }
+
+    if(histPrev) histPrev.onclick = () => { histPage--; renderHistPage(); };
+    if(histNext) histNext.onclick = () => { histPage++; renderHistPage(); };
+
+    function openHistory(id, name){
+      histJobId = id;
+      histPage = 1;
+      histAll = [];
+      document.getElementById('historyTitle').textContent = `History — ${name}`;
+      setHistTab('table');
+      loadHistory();
+      historyModal.classList.add('show');
+    }
+    function closeHistory(){ historyModal.classList.remove('show'); histJobId = null; }
+
+    async function loadHistory(){
+      if(!histJobId) return;
+      const r = await fetch(`/jobs/${histJobId}/history?limit=${HIST_FETCH_LIMIT}`);
+      if(!r.ok){
+        histAll = [];
+        histTblBody.innerHTML = `<tr><td colspan="3" style="padding:6px">No history</td></tr>`;
+        renderHistPage();
+        drawChart([]);
+        return;
+      }
+      const data = await r.json();
+      histAll = Array.isArray(data.items) ? data.items : [];
+      histPage = 1;
+      renderHistPage();
+      drawChart(histAll);
+    }
+
+    function setHistTab(tab){
+      document.getElementById('tabTable').classList.toggle('active', tab==='table');
+      document.getElementById('tabChart').classList.toggle('active', tab==='chart');
+      document.getElementById('histTableWrap').style.display = (tab==='table') ? 'block' : 'none';
+      document.getElementById('histChartWrap').style.display = (tab==='chart') ? 'block' : 'none';
+    }
+
+    function drawChart(items){
+      const w = histCanvas.width, h = histCanvas.height;
+      histCtx.clearRect(0,0,w,h);
+      const padL = 50, padR = 10, padT = 10, padB = 28;
+      if(!items || items.length === 0){
+        histCtx.fillStyle = getComputedStyle(document.body).color;
+        histCtx.fillText('No data', w/2 - 20, h/2);
+        return;
+      }
+      const xs = items.map(d => d.ts);
+      const ys = items.map(d => Number(d.value));
+      const xMin = Math.min(...xs), xMax = Math.max(...xs);
+      let yMin = Math.min(...ys), yMax = Math.max(...ys);
+      if(yMin === yMax){ yMin -= 1; yMax += 1; }
+      const plotW = w - padL - padR, plotH = h - padT - padB;
+      const x2 = (px)=> padL + ((px - xMin) / (xMax - xMin || 1)) * plotW;
+      const y2 = (py)=> padT + plotH - ((py - yMin) / (yMax - yMin || 1)) * plotH;
+
+      const style = getComputedStyle(document.body);
+      histCtx.strokeStyle = style.getPropertyValue('--line') || '#e5e7eb';
+      histCtx.lineWidth = 1;
+      histCtx.beginPath();
+      for(let i=0;i<=5;i++){ const yy = padT + (plotH/5)*i; histCtx.moveTo(padL, yy); histCtx.lineTo(w - padR, yy); }
+      histCtx.stroke();
+
+      histCtx.strokeStyle = style.color; histCtx.lineWidth = 1.2;
+      histCtx.beginPath();
+      histCtx.moveTo(padL, padT); histCtx.lineTo(padL, h - padB);
+      histCtx.moveTo(padL, h - padB); histCtx.lineTo(w - padR, h - padB);
+      histCtx.stroke();
+
+      histCtx.beginPath(); histCtx.lineWidth = 2; histCtx.strokeStyle = style.color;
+      for(let i=0;i<items.length;i++){
+        const px = x2(xs[i]), py = y2(ys[i]);
+        if(i===0) histCtx.moveTo(px,py); else histCtx.lineTo(px,py);
+      }
+      histCtx.stroke();
+
+      histCtx.fillStyle = style.color;
+      for(let i=0;i<items.length;i++){
+        const px = x2(xs[i]), py = y2(ys[i]);
+        histCtx.beginPath(); histCtx.arc(px,py,2.5,0,Math.PI*2); histCtx.fill();
+      }
+    }
+
+    /* AUDIT MODAL */
+    const auditModal = document.getElementById('auditModal');
+    const auditBody  = document.querySelector('#auditTbl tbody');
+
+    let auditPageSize = 10;
+    const AUDIT_FETCH_LIMIT = 2000;
+    let auditAll = [];
+    let auditPage = 1;
+
+    const auditPager = document.getElementById('auditPager');
+    const auditPagerInfo = document.getElementById('auditPagerInfo');
+    const auditPrev = document.getElementById('auditPrev');
+    const auditNext = document.getElementById('auditNext');
+    const auditPageLabel = document.getElementById('auditPageLabel');
+
+    function renderAuditPage(){
+      const total = auditAll.length;
+      const ps = Math.max(1, auditPageSize);
+      const totalPages = Math.max(1, Math.ceil(total / ps));
+      auditPage = Math.max(1, Math.min(auditPage, totalPages));
+
+      const start = (auditPage - 1) * ps;
+      const pageItems = auditAll.slice(start, start + ps);
+
+      auditBody.innerHTML = '';
+      if(pageItems.length === 0){
+        auditBody.innerHTML = `<tr><td colspan="6" style="padding:8px">No audit records</td></tr>`;
+      } else {
+        for(const it of pageItems){
+          const tr = document.createElement('tr');
+          const ok = it.ok ? '✅' : '❌';
+          const t = it.ts ? new Date(it.ts*1000).toLocaleString() : (it.iso || '');
+          const actor = it.actor || '';
+          const action = it.action || '';
+          const target = `${it.target_type || ''}${it.target_id ? ':'+it.target_id : ''}`;
+          const msg = (it.message || '').slice(0, 180);
+          tr.innerHTML = `<td>${t}</td><td>${actor}</td><td><span class="tag">${action}</span></td><td>${target}</td><td>${ok}</td><td>${msg}</td>`;
+          auditBody.appendChild(tr);
+        }
+      }
+
+      if(auditPager){
+        auditPager.style.display = 'flex';
+        if(auditPagerInfo){
+          const from = total === 0 ? 0 : (start + 1);
+          const to = Math.min(start + ps, total);
+          auditPagerInfo.textContent = `${total} items • showing ${from}-${to} • per page ${ps}`;
+        }
+        if(auditPageLabel) auditPageLabel.textContent = `${auditPage} / ${totalPages}`;
+        if(auditPrev) auditPrev.disabled = (auditPage <= 1);
+        if(auditNext) auditNext.disabled = (auditPage >= totalPages);
+      }
+    }
+
+    if(auditPrev) auditPrev.onclick = () => { auditPage--; renderAuditPage(); };
+    if(auditNext) auditNext.onclick = () => { auditPage++; renderAuditPage(); };
+
+    function openAudit(){
+      if(!CAN_AUDIT) return;
+      auditPage = 1;
+      auditAll = [];
+      reloadAudit();
+      auditModal.classList.add('show');
+    }
+    function closeAudit(){ auditModal.classList.remove('show'); }
+
+    async function reloadAudit(){
+      if(!CAN_AUDIT) return;
+      const f = (document.getElementById('auditFilter')?.value || '').toLowerCase().trim();
+      const perRaw = document.getElementById('auditLimit')?.value || '10';
+      auditPageSize = Math.max(1, Math.min(parseInt(perRaw, 10) || 10, 200));
+
+      const r = await fetch(`/audit?limit=${encodeURIComponent(AUDIT_FETCH_LIMIT)}`);
+      if(!r.ok){
+        auditAll = [];
+        auditBody.innerHTML = `<tr><td colspan="6" style="padding:8px">Failed to load audit: ${await r.text()}</td></tr>`;
+        renderAuditPage();
+        return;
+      }
+
+      const data = await r.json();
+      const items = Array.isArray(data.items) ? data.items : [];
+
+      auditAll = items.filter(it => {
+        if(!f) return true;
+        const actor = (it.actor || '').toLowerCase();
+        const action = (it.action || '').toLowerCase();
+        const tid = (it.target_id || '').toLowerCase();
+        const msg = (it.message || '').toLowerCase();
+        return actor.includes(f) || action.includes(f) || tid.includes(f) || msg.includes(f);
+      });
+
+      auditPage = 1;
+      renderAuditPage();
+    }
+
+    /* WHOAMI + TENANT (SƏNİN ERROR BURDA İDİ -> indi düzəldi) */
+    fetch('/whoami')
+      .then(r => r.json())
+      .then(x => {
+        const u = x.user || {};
+        ROLE = (u && typeof u === 'object') ? (u.role || '') : '';
+        CAN_WRITE = (ROLE === 'admin' || ROLE === 'editor');
+        CAN_AUDIT = (ROLE === 'admin');
+
+        const btnAudit = document.getElementById('btnAudit');
+        if (btnAudit) btnAudit.style.display = CAN_AUDIT ? 'inline-block' : 'none';
+
+        let name = '-';
+        if (typeof u === 'string') name = u;
+        else if (u && typeof u === 'object') name = u.display_name || u.name || u.preferred_username || u.email || '-';
+        document.getElementById('whoami').textContent = name + (CAN_WRITE ? '' : ' (read-only)');
+
+        if(!CAN_WRITE){
+          document.getElementById('btnCreate').disabled = true;
+          document.getElementById('roHintCreate').style.display = 'inline';
+        }
+
+        const allowed = Array.isArray(x.allowed_tenants) ? x.allowed_tenants : [];
+        const active  = (x.active_tenant && String(x.active_tenant).trim()) || (allowed[0] || 'business');
+
+        const box = document.getElementById('tenantBox');
+        const sel = document.getElementById('tenantSel');
+
+        if (allowed.length <= 1) {
+          box.style.display = 'none';
+        } else {
+          box.style.display = 'flex';
+          sel.innerHTML = '';
+          for (const t of allowed) {
+            const opt = document.createElement('option');
+            opt.value = t;
+            opt.textContent = t;
+            if (t === active) opt.selected = true;
+            sel.appendChild(opt);
+          }
+
+          sel.onchange = async () => {
+            const fd = new FormData();
+            fd.append('tenant', sel.value);
+            const rr = await fetch('/tenant', { method: 'POST', body: fd });
+            if (!rr.ok) {
+              alert('Tenant switch failed: ' + await rr.text());
+              sel.value = active;
+              return;
+            }
+            reloadJobs();
+          };
+        }
+
+        reloadJobs();
+      })
+      .catch(() => {
+        document.getElementById('whoami').textContent = '-';
+        const box = document.getElementById('tenantBox');
+        if (box) box.style.display = 'none';
+        reloadJobs();
+      });
+
+    // expose
+    window.reloadJobs = reloadJobs;
+    window.toggleJob = toggleJob;
+    window.runNow = runNow;
+    window.delJob = delJob;
+    window.openEdit = openEdit;
+    window.closeEdit = closeEdit;
+    window.openHistory = openHistory;
+    window.closeHistory = closeHistory;
+    window.setHistTab = setHistTab;
+    window.openAudit = openAudit;
+    window.closeAudit = closeAudit;
+    window.reloadAudit = reloadAudit;
+    window.toggleMetrics = toggleMetrics;
+    window.openView = openView;
+  </script>
+</body>
+</html>
