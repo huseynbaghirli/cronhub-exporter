@@ -558,6 +558,7 @@
           if(CAN_WRITE){
             actionsHtml += `
               <button type="button" onclick="runNow('${j.id}')">Run Now</button>
+              <button type="button" onclick="duplicateJob('${j.id}')">Duplicate</button>
               <button type="button" onclick="openEdit('${j.id}')">Edit</button>
               <button type="button" onclick="delJob('${j.id}')">Delete</button>
             `;
@@ -609,6 +610,14 @@
       if(!CAN_WRITE) return;
       await fetch(`/jobs/${id}/run`, {method:'POST'});
       setTimeout(reloadJobs, 800);
+    }
+    async function duplicateJob(id){
+      if(!CAN_WRITE) return;
+      const r = await fetch(`/jobs/${id}/duplicate`, {method:'POST'});
+      if(!r.ok){ alert('Duplicate failed: ' + await r.text()); return; }
+      const data = await r.json();
+      await reloadJobs();
+      if(data.id) openEdit(data.id);
     }
     async function delJob(id){
       if(!CAN_WRITE) return;
@@ -1001,6 +1010,7 @@
     window.reloadJobs = reloadJobs;
     window.toggleJob = toggleJob;
     window.runNow = runNow;
+    window.duplicateJob = duplicateJob;
     window.delJob = delJob;
     window.openEdit = openEdit;
     window.closeEdit = closeEdit;
