@@ -284,6 +284,17 @@ def view_job(request: Request, job_id: str):
     extra_labels_dict = pj.get("extra_labels") or {}
     extra_labels = esc(", ".join(f"{k}={v}" for k, v in extra_labels_dict.items()) or "-")
 
+    command_block = ""
+    if typ == "shell":
+        copy_btn = (
+            "<button class='iconbtn' type='button' "
+            "onclick=\"copyText('cmdPre', this)\">📋 Copy</button>"
+        )
+        command_block = (
+            "<div class='k' style='display:flex;justify-content:space-between;align-items:center'>"
+            f"<span>Command</span>{copy_btn}</div><pre id='cmdPre'>{cmd}</pre>"
+        )
+
     html_body = f"""<!doctype html>
 <html data-theme="light">
 <head>
@@ -348,7 +359,7 @@ def view_job(request: Request, job_id: str):
 
     <div style="margin-top:14px">
       <h3 style="margin:0 0 8px 0">Details</h3>
-      {("<div class='k'>Command</div><pre>"+cmd+"</pre>") if typ=="shell" else ""}
+      {command_block}
       {("<div class='k'>HTTP</div><div class='v'><b>"+method+"</b> "+url+"</div>") if typ=="http" else ""}
       {("<div class='k'>Headers</div><pre>"+headers+"</pre>") if typ=="http" and headers else ""}
       {("<div class='k'>Body</div><pre>"+body+"</pre>") if typ=="http" and body else ""}
@@ -366,6 +377,18 @@ def view_job(request: Request, job_id: str):
       applyTheme(cur === 'dark' ? 'light' : 'dark');
     }}
     applyTheme(localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+
+    function copyText(id, btn) {{
+      const el = document.getElementById(id);
+      if (!el) return;
+      const text = el.innerText || el.textContent || '';
+      navigator.clipboard.writeText(text).then(() => {{
+        if (!btn) return;
+        const orig = btn.textContent;
+        btn.textContent = '✅ Copied';
+        setTimeout(() => {{ btn.textContent = orig; }}, 1200);
+      }});
+    }}
   </script>
 </body>
 </html>"""

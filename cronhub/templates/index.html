@@ -97,14 +97,18 @@
             <input name="name" placeholder="sql-count" required />
           </div>
 
-          <div style="flex:2;min-width:220px">
+          <div style="flex:3;min-width:340px">
             <label>Description (max 100)</label>
-            <input name="description" maxlength="100" placeholder="Optional description" />
+            <textarea name="description" maxlength="100" rows="2" placeholder="Optional description" style="font-family:inherit;resize:vertical"></textarea>
           </div>
 
-          <div style="flex:1;min-width:200px">
+          <div style="flex:1;min-width:220px">
             <label>Folder</label>
-            <input name="folder" placeholder="e.g. Payments/Reports" />
+            <select id="folderPick" data-target="folderInput" onchange="onFolderPick(this)">
+              <option value="">— Select existing / New —</option>
+              <option value="__new__">+ New Folder</option>
+            </select>
+            <input name="folder" id="folderInput" placeholder="e.g. Payments/Reports" style="margin-top:6px" />
             <div class="muted">Folder logic: nested like Payments/Reports</div>
           </div>
 
@@ -226,14 +230,18 @@
             <input id="editName" required />
           </div>
 
-          <div style="flex:2;min-width:220px">
+          <div style="flex:3;min-width:340px">
             <label>Description (max 100)</label>
-            <input id="editDesc" maxlength="100" />
+            <textarea id="editDesc" maxlength="100" rows="2" style="font-family:inherit;resize:vertical"></textarea>
           </div>
 
-          <div style="flex:1;min-width:200px">
+          <div style="flex:1;min-width:220px">
             <label>Folder</label>
-            <input id="editFolder" />
+            <select id="editFolderPick" data-target="editFolder" onchange="onFolderPick(this)">
+              <option value="">— Select existing / New —</option>
+              <option value="__new__">+ New Folder</option>
+            </select>
+            <input id="editFolder" style="margin-top:6px" />
           </div>
 
           <div style="flex:1;min-width:200px">
@@ -462,6 +470,29 @@
       setCreateOpen(false);
     });
 
+    /* FOLDER PICKER */
+    function populateFolderPickers(folderNames){
+      for(const selId of ['folderPick', 'editFolderPick']){
+        const sel = document.getElementById(selId);
+        if(!sel) continue;
+        const cur = sel.value;
+        sel.innerHTML = '<option value="">— Select existing / New —</option><option value="__new__">+ New Folder</option>' +
+          folderNames.map(f => `<option value="${f.replace(/"/g,'&quot;')}">${f}</option>`).join('');
+        if(folderNames.includes(cur)) sel.value = cur;
+      }
+    }
+
+    function onFolderPick(sel){
+      const inp = document.getElementById(sel.dataset.target);
+      if(!inp) return;
+      if(sel.value === '__new__'){
+        inp.value = '';
+        inp.focus();
+      } else if(sel.value){
+        inp.value = sel.value;
+      }
+    }
+
     /* JOBS TABLE */
     async function reloadJobs(){
       const r = await fetch('/jobs');
@@ -469,6 +500,9 @@
       const data = await r.json();
       const tb = document.querySelector('#jobsTbl tbody');
       tb.innerHTML='';
+
+      const realFolders = [...new Set(data.map(j => (j.folder || '').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+      populateFolderPickers(realFolders);
 
       // folder -> list
       const folders = {};
@@ -615,6 +649,8 @@
       document.getElementById('editName').value = j.name || '';
       document.getElementById('editDesc').value = j.description || '';
       document.getElementById('editFolder').value = j.folder || '';
+      const editFolderPickEl = document.getElementById('editFolderPick');
+      if(editFolderPickEl) editFolderPickEl.value = j.folder || '';
       document.getElementById('editCron').value = j.cron || '';
       document.getElementById('editTimeout').value = j.timeout || '';
       document.getElementById('editRegex').value = j.value_regex || '';
@@ -976,6 +1012,7 @@
     window.reloadAudit = reloadAudit;
     window.toggleMetrics = toggleMetrics;
     window.openView = openView;
+    window.onFolderPick = onFolderPick;
   </script>
 </body>
 </html>
