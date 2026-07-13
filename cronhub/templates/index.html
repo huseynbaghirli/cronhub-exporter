@@ -139,6 +139,12 @@
               <span class="slider"></span>
             </label>
           </div>
+
+          <div style="flex:1;min-width:260px">
+            <label>Extra Labels (one per line, key=value)</label>
+            <textarea name="extra_labels" rows="2" placeholder="env=prod&#10;team=payments"></textarea>
+            <div class="muted">Added as extra Prometheus labels on /metrics</div>
+          </div>
         </div>
 
         <div id="shellFields" class="row" style="margin-top:8px">
@@ -264,6 +270,11 @@
               <input type="checkbox" id="editMetrics" value="1">
               <span class="slider"></span>
             </label>
+          </div>
+
+          <div style="flex:1;min-width:260px">
+            <label>Extra Labels (one per line, key=value)</label>
+            <textarea id="editExtraLabels" rows="2" placeholder="env=prod&#10;team=payments"></textarea>
           </div>
         </div>
 
@@ -617,6 +628,9 @@
       document.getElementById('editBody').value    = j.body || '';
       document.getElementById('editMetrics').checked = !!(j.metrics_enabled ?? (j.config && j.config.metrics_enabled));
 
+      const extraLabels = j.extra_labels || {};
+      document.getElementById('editExtraLabels').value = Object.entries(extraLabels).map(([k,v]) => `${k}=${v}`).join('\n');
+
       toggleEditType();
       editModal.classList.add('show');
     }
@@ -637,6 +651,7 @@
       fd.append('value_regex', document.getElementById('editRegex').value);
       fd.append('retention_days', document.getElementById('editRetention').value || '1');
       fd.append('metrics_enabled', document.getElementById('editMetrics').checked ? '1' : '0');
+      fd.append('extra_labels', document.getElementById('editExtraLabels').value);
 
       if(document.getElementById('editType').value === 'shell'){
         fd.append('command', document.getElementById('editCommand').value);
