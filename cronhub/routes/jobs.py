@@ -3,6 +3,8 @@ from datetime import datetime
 import uuid
 import time
 import html
+import json
+import re
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response, HTMLResponse
@@ -16,6 +18,48 @@ from ..scheduler.audit import audit_insert, audit_list
 router = APIRouter()
 
 DEFAULT_TENANT = "business"
+
+LABEL_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+RESERVED_LABEL_KEYS = {"job_id", "job_name", "tenant", "subjob", "list"}
+
+
+def _parse_extra_labels(text: str | None) -> dict[str, str]:
+    """Parses 'key=value' lines (or a JSON object) into Prometheus-safe label names."""
+    raw: dict[str, str] = {}
+
+    if text and text.strip():
+        try:
+            obj = json.loads(text)
+        except Exception:
+            obj = None
+        if isinstance(obj, dict):
+            raw = {str(k): str(v) for k, v in obj.items()}
+        else:
+            for line in text.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                elif ":" in line:
+                    k, v = line.split(":", 1)
+                else:
+                    continue
+                raw[k.strip()] = v.strip()
+
+    out: dict[str, str] = {}
+    for k, v in raw.items():
+        key = k.strip()
+        if not key:
+            continue
+        if not LABEL_KEY_RE.match(key):
+            key = re.sub(r"[^a-zA-Z0-9_]", "_", key)
+            if not key or key[0].isdigit():
+                key = "_" + key
+        if key in RESERVED_LABEL_KEYS:
+            continue
+        out[key] = v
+    return out
 
 
 def _actor_info(request: Request):
@@ -165,6 +209,7 @@ def _job_public(job, tenant: str):
         "value_regex": cfg.get("value_regex"),
         "retention_days": cfg.get("retention_days", 1),
         "metrics_enabled": bool(cfg.get("metrics_enabled", False)),
+        "extra_labels": cfg.get("extra_labels", {}) or {},
         "command": cfg.get("command"),
         "method": cfg.get("method"),
         "url": cfg.get("url"),
@@ -236,6 +281,8 @@ def view_job(request: Request, job_id: str):
     url = esc(pj.get("url") or "")
     headers = esc(pj.get("headers") or "")
     body = esc(pj.get("body") or "")
+    extra_labels_dict = pj.get("extra_labels") or {}
+    extra_labels = esc(", ".join(f"{k}={v}" for k, v in extra_labels_dict.items()) or "-")
 
     html_body = f"""<!doctype html>
 <html data-theme="light">
@@ -286,6 +333,7 @@ def view_job(request: Request, job_id: str):
       <div class="kv"><div class="k">Value Regex</div><div class="v">{regex}</div></div>
       <div class="kv"><div class="k">On/Off</div><div class="v">{paused}</div></div>
       <div class="kv"><div class="k">Metrics</div><div class="v">{metrics}</div></div>
+      <div class="kv"><div class="k">Extra Labels</div><div class="v">{extra_labels}</div></div>
     </div>
 
     <div class="row" style="margin-top:10px">
@@ -341,6 +389,7 @@ def create_job(
     value_regex: str = Form(None),
     retention_days: str = Form("1"),
     metrics_enabled: str = Form(None),
+    extra_labels: str = Form(None),
 ):
     _require_write(request)
 
@@ -377,6 +426,7 @@ def create_job(
         "value_regex": value_regex,
         "retention_days": rd,
         "metrics_enabled": _parse_bool(metrics_enabled),
+        "extra_labels": _parse_extra_labels(extra_labels),
     }
 
     if t == "shell":
@@ -419,6 +469,7 @@ def update_job(
     value_regex: str = Form(None),
     retention_days: str = Form(None),
     metrics_enabled: str = Form(None),
+    extra_labels: str = Form(None),
 ):
     _require_write(request)
 
@@ -464,6 +515,9 @@ def update_job(
 
     if metrics_enabled is not None:
         cfg["metrics_enabled"] = _parse_bool(metrics_enabled)
+
+    if extra_labels is not None:
+        cfg["extra_labels"] = _parse_extra_labels(extra_labels)
 
     t = cfg.get("type")
     if t not in ("shell", "http"):
@@ -676,7 +730,11 @@ def metrics():
         if not last:
             continue
 
-        base_labels = f'job_id="{job_id}",job_name="{exec_mod._esc(name)}",tenant="{exec_mod._esc(str(tenant))}"'
+        extra_labels = cfg.get("extra_labels") or {}
+        extra_labels_str = "".join(
+            f',{k}="{exec_mod._esc(str(v))}"' for k, v in extra_labels.items()
+        )
+        base_labels = f'job_id="{job_id}",job_name="{exec_mod._esc(name)}",tenant="{exec_mod._esc(str(tenant))}"{extra_labels_str}'
 
         success = 0 if last.get("error") else 1
         lines.append(f"cronhub_job_success{{{base_labels}}} {success}")

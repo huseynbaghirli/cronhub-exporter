@@ -12,4 +12,5 @@ RUN apt update
 RUN apt-get install -y postgresql-client fonts-liberation curl jq wget
 RUN apt-get install -y fontconfig fonts-dejavu-core fonts-dejavu-extra fc-cache -f -v
 RUN apt-get install -y fonts-dejavu-core fontconfig
+RUN apt-get install -y redis-tools openssh-client
 CMD ["uvicorn", "cronhub.main:app", "--host", "0.0.0.0", "--port", "8000"]
