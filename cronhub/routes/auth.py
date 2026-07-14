@@ -280,11 +280,23 @@ async def auth_callback(request: Request):
 async def set_tenant(request: Request, tenant: str = Form(...)):
     user = request.session.get("user") or {}
     allowed = (user or {}).get("allowed_tenants") or []
-    if not allowed:
-        return JSONResponse({"ok": False, "error": "no allowed tenants"}, status_code=403)
+    role = user.get("role") if isinstance(user, dict) else None
 
-    if tenant not in allowed:
-        return JSONResponse({"ok": False, "error": "tenant not allowed"}, status_code=403)
+    tenant = (tenant or "").strip()
+    if not tenant:
+        return JSONResponse({"ok": False, "error": "tenant is required"}, status_code=400)
+
+    is_admin = (role == "admin")
+    if not is_admin:
+        if not allowed:
+            return JSONResponse({"ok": False, "error": "no allowed tenants"}, status_code=403)
+        if tenant not in allowed:
+            return JSONResponse({"ok": False, "error": "tenant not allowed"}, status_code=403)
+    elif tenant not in allowed:
+        # Admins can create a brand-new tenant simply by switching to it.
+        allowed = allowed + [tenant]
+        user["allowed_tenants"] = allowed
+        request.session["user"] = user
 
     old = request.session.get("active_tenant") or DEFAULT_TENANT
     request.session["active_tenant"] = tenant

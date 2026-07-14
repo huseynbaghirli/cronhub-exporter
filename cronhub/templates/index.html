@@ -945,10 +945,36 @@
       renderAuditPage();
     }
 
-    /* WHOAMI + TENANT (SƏNİN ERROR BURDA İDİ -> indi düzəldi) */
+    /* WHOAMI + TENANT */
+    async function loadKnownTenants(){
+      try{
+        const r = await fetch('/tenants');
+        if(!r.ok) return [];
+        const d = await r.json();
+        return Array.isArray(d.tenants) ? d.tenants : [];
+      }catch(e){ return []; }
+    }
+
+    function buildTenantSelect(sel, tenants, active){
+      sel.innerHTML = '';
+      for(const t of tenants){
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        if(t === active) opt.selected = true;
+        sel.appendChild(opt);
+      }
+      if(ROLE === 'admin'){
+        const opt = document.createElement('option');
+        opt.value = '__new__';
+        opt.textContent = '+ New Tenant';
+        sel.appendChild(opt);
+      }
+    }
+
     fetch('/whoami')
       .then(r => r.json())
-      .then(x => {
+      .then(async (x) => {
         const u = x.user || {};
         ROLE = (u && typeof u === 'object') ? (u.role || '') : '';
         CAN_WRITE = (ROLE === 'admin' || ROLE === 'editor');
@@ -967,34 +993,43 @@
           document.getElementById('roHintCreate').style.display = 'inline';
         }
 
-        const allowed = Array.isArray(x.allowed_tenants) ? x.allowed_tenants : [];
-        const active  = (x.active_tenant && String(x.active_tenant).trim()) || (allowed[0] || 'business');
+        let allowed = Array.isArray(x.allowed_tenants) ? x.allowed_tenants : [];
+        const active = (x.active_tenant && String(x.active_tenant).trim()) || (allowed[0] || 'business');
+
+        if(ROLE === 'admin'){
+          const known = await loadKnownTenants();
+          allowed = [...new Set([...allowed, ...known])].sort((a,b)=>a.localeCompare(b));
+        }
 
         const box = document.getElementById('tenantBox');
         const sel = document.getElementById('tenantSel');
 
-        if (allowed.length <= 1) {
+        if (allowed.length <= 1 && ROLE !== 'admin') {
           box.style.display = 'none';
         } else {
           box.style.display = 'flex';
-          sel.innerHTML = '';
-          for (const t of allowed) {
-            const opt = document.createElement('option');
-            opt.value = t;
-            opt.textContent = t;
-            if (t === active) opt.selected = true;
-            sel.appendChild(opt);
-          }
+          buildTenantSelect(sel, allowed, active);
 
           sel.onchange = async () => {
+            let target = sel.value;
+            if(target === '__new__'){
+              const name = (prompt('New tenant name:') || '').trim();
+              if(!name){ sel.value = active; return; }
+              target = name;
+            }
             const fd = new FormData();
-            fd.append('tenant', sel.value);
+            fd.append('tenant', target);
             const rr = await fetch('/tenant', { method: 'POST', body: fd });
             if (!rr.ok) {
               alert('Tenant switch failed: ' + await rr.text());
               sel.value = active;
               return;
             }
+            if(!allowed.includes(target)){
+              allowed.push(target);
+              allowed.sort((a,b)=>a.localeCompare(b));
+            }
+            buildTenantSelect(sel, allowed, target);
             reloadJobs();
           };
         }

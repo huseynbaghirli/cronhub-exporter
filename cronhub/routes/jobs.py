@@ -233,6 +233,24 @@ def list_jobs(request: Request):
     return JSONResponse(out)
 
 
+@router.get("/tenants")
+def list_tenants(request: Request):
+    tenants = {DEFAULT_TENANT}
+
+    jobs = exec_mod.scheduler.get_jobs() if exec_mod.scheduler else []
+    for j in jobs:
+        t = _job_tenant(j)
+        if t:
+            tenants.add(t)
+
+    user = request.session.get("user") or {}
+    for t in (user.get("allowed_tenants") or []):
+        if isinstance(t, str) and t.strip():
+            tenants.add(t.strip())
+
+    return {"tenants": sorted(tenants)}
+
+
 @router.get("/jobs/{job_id}")
 def get_job(request: Request, job_id: str):
     sched = exec_mod.scheduler
