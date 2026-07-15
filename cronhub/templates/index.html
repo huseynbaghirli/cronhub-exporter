@@ -464,8 +464,10 @@
 
       <div class="muted" style="margin-bottom:10px">
         A keypair is generated automatically the first time the container starts and is stored in the
-        persisted <code>data</code> volume, so it survives redeploys. Use it so shell jobs can
-        <code>ssh</code>/<code>scp</code> without a password prompt.
+        persisted <code>data</code> volume, so it survives redeploys. It's also set as the container's
+        default SSH identity, so shell jobs can just run <code>ssh</code>/<code>scp</code> with no
+        <code>-i</code> flag and no password prompt. New hosts are auto-trusted on first connect
+        (<code>StrictHostKeyChecking accept-new</code>) so a job doesn't hang waiting on a yes/no prompt.
       </div>
 
       <label>Private key path (inside container)</label>
@@ -1184,7 +1186,7 @@
       document.getElementById('sshCopyIdCmd').textContent =
         `docker exec -it cronhub ssh-copy-id -i ${keyPath}.pub ${user}@${host}`;
       document.getElementById('sshUsageCmd').textContent =
-        `ssh -i ${keyPath} -o StrictHostKeyChecking=no ${user}@${host} "your command here"`;
+        `ssh ${user}@${host} "your command here"`;
     }
 
     async function reloadSshKey(){
