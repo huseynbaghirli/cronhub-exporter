@@ -2,6 +2,11 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
+
+# Default remote user for the auto-generated SSH key (shell jobs that ssh
+# out use this). Override in .env / docker run -e without rebuilding.
+ENV CRONHUB_SSH_USER=ansible
+
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
