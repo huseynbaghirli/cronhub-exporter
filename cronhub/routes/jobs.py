@@ -6,7 +6,7 @@ import html
 import json
 import re
 
-from fastapi import APIRouter, Form, HTTPException, Query, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request, UploadFile, File
 from fastapi.responses import JSONResponse, Response, HTMLResponse
 from apscheduler.triggers.cron import CronTrigger
 
@@ -15,6 +15,7 @@ from ..core.rbac import effective_role_for_tenant
 from ..scheduler import executor as exec_mod
 from ..scheduler.history import history_select, last_results_select
 from ..scheduler.audit import audit_insert, audit_list
+from ..scheduler.tenant_access import tenant_access_delete_tenant
 
 router = APIRouter()
 
@@ -111,6 +112,8 @@ IMPORTANT_AUDIT_ACTIONS = {
     "job.run_now",
     "job.metrics_toggle",
     "job.duplicate",
+    "tenant.delete",
+    "jobs.import",
 }
 
 
@@ -248,6 +251,134 @@ def list_tenants(request: Request):
             tenants.add(t.strip())
 
     return {"tenants": sorted(tenants)}
+
+
+@router.delete("/tenants/{tenant}")
+def delete_tenant(request: Request, tenant: str):
+    _require_admin(request)
+
+    tenant = (tenant or "").strip()
+    if not tenant:
+        raise HTTPException(400, "tenant is required")
+    if tenant == DEFAULT_TENANT:
+        raise HTTPException(400, f"cannot delete the default tenant ({DEFAULT_TENANT})")
+
+    jobs = exec_mod.scheduler.get_jobs() if exec_mod.scheduler else []
+    to_remove = [j.id for j in jobs if _job_tenant(j) == tenant]
+    for job_id in to_remove:
+        exec_mod.scheduler.remove_job(job_id)
+        exec_mod.LAST_RESULTS.pop(job_id, None)
+
+    tenant_access_delete_tenant(tenant)
+
+    user = request.session.get("user") or {}
+    if isinstance(user, dict):
+        allowed = [t for t in (user.get("allowed_tenants") or []) if t != tenant]
+        user["allowed_tenants"] = allowed
+        tenant_roles = dict(user.get("tenant_roles") or {})
+        tenant_roles.pop(tenant, None)
+        user["tenant_roles"] = tenant_roles
+        request.session["user"] = user
+    else:
+        allowed = []
+
+    new_active = request.session.get("active_tenant") or DEFAULT_TENANT
+    if new_active == tenant:
+        new_active = allowed[0] if allowed else DEFAULT_TENANT
+        request.session["active_tenant"] = new_active
+
+    _audit(
+        request,
+        "tenant.delete",
+        tenant=tenant,
+        target_type="tenant",
+        target_id=tenant,
+        ok=True,
+        meta={"deleted_job_count": len(to_remove)},
+    )
+
+    return {"ok": True, "deleted_jobs": len(to_remove), "active_tenant": new_active}
+
+
+@router.get("/admin/export/jobs.json")
+def export_jobs_json(request: Request):
+    """Downloads every job (across all tenants/folders) as a JSON file that
+    /admin/import/jobs can read back in."""
+    _require_admin(request)
+
+    jobs = exec_mod.scheduler.get_jobs() if exec_mod.scheduler else []
+    items = [dict(j.kwargs.get("config", {})) for j in jobs if j.kwargs]
+
+    payload = json.dumps({"items": items}, ensure_ascii=False, indent=2)
+    return Response(
+        payload,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=cronhub_jobs_export.json"},
+    )
+
+
+@router.post("/admin/import/jobs")
+async def import_jobs_json(request: Request, file: UploadFile = File(...)):
+    """Recreates jobs from a file produced by /admin/export/jobs.json,
+    restoring each job's tenant/folder/name/cron/etc. exactly as exported.
+    Existing job ids are left untouched (skipped, not overwritten)."""
+    _require_admin(request)
+
+    raw = await file.read()
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except Exception as e:
+        raise HTTPException(400, f"Invalid JSON: {e}")
+
+    items = payload.get("items") if isinstance(payload, dict) else payload
+    if not isinstance(items, list):
+        raise HTTPException(400, 'Expected a list of job configs (or {"items": [...]})')
+
+    imported, skipped, errors = 0, 0, []
+    for cfg in items:
+        if not isinstance(cfg, dict):
+            errors.append("skipped a non-object entry")
+            continue
+
+        job_id = cfg.get("id")
+        if not job_id:
+            errors.append("skipped an entry with no id")
+            continue
+
+        if exec_mod.scheduler.get_job(job_id):
+            skipped += 1
+            continue
+
+        try:
+            trigger = CronTrigger.from_crontab(cfg.get("cron") or "* * * * *", timezone=TZ)
+        except Exception as e:
+            errors.append(f"{job_id}: invalid cron ({e})")
+            continue
+
+        try:
+            exec_mod.scheduler.add_job(
+                exec_mod.execute_job,
+                trigger=trigger,
+                id=job_id,
+                args=[job_id],
+                kwargs={"config": cfg},
+                replace_existing=False,
+            )
+            imported += 1
+        except Exception as e:
+            errors.append(f"{job_id}: {e}")
+
+    _audit(
+        request,
+        "jobs.import",
+        tenant=_active_tenant(request),
+        target_type="jobs",
+        target_id=None,
+        ok=True,
+        meta={"imported": imported, "skipped": skipped, "error_count": len(errors)},
+    )
+
+    return {"ok": True, "imported": imported, "skipped": skipped, "errors": errors[:50]}
 
 
 @router.get("/jobs/{job_id}")

@@ -52,6 +52,15 @@ def tenant_access_delete(user_sub: str, tenant: str):
         conn.commit()
 
 
+def tenant_access_delete_tenant(tenant: str):
+    """Removes every grant for a tenant (regardless of user) - used when the
+    tenant itself is deleted."""
+    init_tenant_access_db()
+    with _db_conn() as conn:
+        conn.execute("DELETE FROM cronhub_tenant_access WHERE tenant=?", (tenant,))
+        conn.commit()
+
+
 def tenant_access_list_for_user(user_sub: str) -> dict[str, str]:
     init_tenant_access_db()
     with _db_conn() as conn:
