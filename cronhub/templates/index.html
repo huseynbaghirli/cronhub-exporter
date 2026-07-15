@@ -479,11 +479,20 @@
         <button class="iconbtn" type="button" onclick="copyText('sshPubKey', this)">📋 Copy</button>
       </div>
 
-      <label>1. Install the key on a remote host (once per host)</label>
-      <pre id="sshCopyIdCmd">-</pre>
+      <label>Remote host (type it in, the commands below fill in automatically)</label>
+      <input id="sshRemoteHost" placeholder="10.120.40.130" oninput="updateSshCommands()" style="margin-bottom:14px" />
+
+      <label>1. Install the key on the remote host (once per host, run via docker exec)</label>
+      <div class="row" style="align-items:flex-start;margin-bottom:14px">
+        <pre id="sshCopyIdCmd" style="flex:1;margin:0">-</pre>
+        <button class="iconbtn" type="button" onclick="copyText('sshCopyIdCmd', this)">📋 Copy</button>
+      </div>
 
       <label>2. Use it in a shell job command</label>
-      <pre id="sshUsageCmd">-</pre>
+      <div class="row" style="align-items:flex-start">
+        <pre id="sshUsageCmd" style="flex:1;margin:0">-</pre>
+        <button class="iconbtn" type="button" onclick="copyText('sshUsageCmd', this)">📋 Copy</button>
+      </div>
     </div>
   </div>
 
@@ -1157,6 +1166,7 @@
 
     /* SSH KEY MODAL */
     const sshKeyModal = document.getElementById('sshKeyModal');
+    let SSH_INFO = null;
 
     function openSshKey(){
       if(!CAN_AUDIT) return;
@@ -1165,6 +1175,18 @@
     }
     function closeSshKey(){ sshKeyModal.classList.remove('show'); }
 
+    function updateSshCommands(){
+      if(!SSH_INFO) return;
+      const host = (document.getElementById('sshRemoteHost').value || '').trim() || '<remote-host>';
+      const user = SSH_INFO.ssh_user || 'ansible';
+      const keyPath = SSH_INFO.private_key_path;
+
+      document.getElementById('sshCopyIdCmd').textContent =
+        `docker exec -it cronhub ssh-copy-id -i ${keyPath}.pub ${user}@${host}`;
+      document.getElementById('sshUsageCmd').textContent =
+        `ssh -i ${keyPath} -o StrictHostKeyChecking=no ${user}@${host} "your command here"`;
+    }
+
     async function reloadSshKey(){
       if(!CAN_AUDIT) return;
       const r = await fetch('/ssh-key/info');
@@ -1172,13 +1194,10 @@
         document.getElementById('sshPubKey').textContent = 'Failed to load: ' + await r.text();
         return;
       }
-      const d = await r.json();
-      document.getElementById('sshKeyPath').textContent = d.private_key_path || '-';
-      document.getElementById('sshPubKey').textContent = d.public_key || '-';
-      document.getElementById('sshCopyIdCmd').textContent =
-        `docker exec -it cronhub ssh-copy-id -i ${d.private_key_path}.pub <user>@<remote-host>`;
-      document.getElementById('sshUsageCmd').textContent =
-        `ssh -i ${d.private_key_path} -o StrictHostKeyChecking=no <user>@<remote-host> "your command here"`;
+      SSH_INFO = await r.json();
+      document.getElementById('sshKeyPath').textContent = SSH_INFO.private_key_path || '-';
+      document.getElementById('sshPubKey').textContent = SSH_INFO.public_key || '-';
+      updateSshCommands();
     }
 
     /* WHOAMI + TENANT */
@@ -1310,6 +1329,7 @@
     window.revokeAccess = revokeAccess;
     window.openSshKey = openSshKey;
     window.closeSshKey = closeSshKey;
+    window.updateSshCommands = updateSshCommands;
     window.copyText = copyText;
   </script>
 </body>

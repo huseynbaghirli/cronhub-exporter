@@ -5,6 +5,7 @@ from pathlib import Path
 SSH_DIR = Path(os.getenv("CRONHUB_SSH_DIR", "data/.ssh"))
 KEY_NAME = os.getenv("CRONHUB_SSH_KEY_NAME", "id_ed25519")
 KEY_COMMENT = os.getenv("CRONHUB_SSH_KEY_COMMENT", "cronhub-ansible")
+SSH_USER = os.getenv("CRONHUB_SSH_USER", "ansible")
 
 
 def private_key_path() -> Path:
