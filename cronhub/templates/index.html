@@ -75,6 +75,8 @@
 
       <button id="btnAudit" class="iconbtn" type="button" onclick="openAudit()" title="Audit" style="display:none">🧾 Audit</button>
 
+      <button id="btnUsers" class="iconbtn" type="button" onclick="openUsers()" title="Users" style="display:none">👤 Users</button>
+
       <button id="themeToggle" class="iconbtn themeToggle" aria-label="Toggle theme" title="Toggle dark mode" type="button">
         <span id="themeIcon" class="icon">🌙</span><span id="themeText">Dark</span>
       </button>
@@ -405,11 +407,64 @@
     </div>
   </div>
 
+  <!-- USERS / TENANT ACCESS MODAL -->
+  <div id="usersModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 style="margin:0">Users — Tenant Access</h3>
+        <button class="iconbtn" type="button" onclick="closeUsers()" title="Close">✖</button>
+      </div>
+
+      <div class="muted" style="margin-bottom:10px">
+        Grant a user editor/viewer access to a specific tenant. Global admins (DevOps group / local admin)
+        already have access to everything and don't need a grant here.
+      </div>
+
+      <form id="grantForm" class="row" style="align-items:end;margin-bottom:14px">
+        <div style="flex:2;min-width:220px">
+          <label>User</label>
+          <select id="grantUser" required></select>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <label>Tenant</label>
+          <select id="grantTenant" required></select>
+        </div>
+        <div style="width:140px">
+          <label>Role</label>
+          <select id="grantRole">
+            <option value="editor">Editor (write)</option>
+            <option value="ro">Viewer (read-only)</option>
+          </select>
+        </div>
+        <div>
+          <button type="submit">Grant</button>
+        </div>
+      </form>
+
+      <table id="tenantAccessTbl">
+        <thead>
+          <tr>
+            <th>User</th><th>Email</th><th>Tenant</th><th>Role</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
   <script>
     // role flags
-    let ROLE = '';
+    let ROLE = '';           // global role (from Keycloak group / local admin)
+    let EFFECTIVE_ROLE = ''; // role for the currently active tenant (per-tenant grants can override)
     let CAN_WRITE = false;
     let CAN_AUDIT = false;
+
+    function applyWriteUI(){
+      const btnCreate = document.getElementById('btnCreate');
+      const roHint = document.getElementById('roHintCreate');
+      if(btnCreate) btnCreate.disabled = !CAN_WRITE;
+      if(roHint) roHint.style.display = CAN_WRITE ? 'none' : 'inline';
+    }
 
     /* THEME */
     const root = document.documentElement;
@@ -945,6 +1000,89 @@
       renderAuditPage();
     }
 
+    /* USERS / TENANT ACCESS MODAL */
+    const usersModal = document.getElementById('usersModal');
+    const tenantAccessBody = document.querySelector('#tenantAccessTbl tbody');
+
+    function openUsers(){
+      if(!CAN_AUDIT) return;
+      reloadUsers();
+      usersModal.classList.add('show');
+    }
+    function closeUsers(){ usersModal.classList.remove('show'); }
+
+    async function reloadUsers(){
+      if(!CAN_AUDIT) return;
+
+      const [usersRes, tenantsRes, grantsRes] = await Promise.all([
+        fetch('/users?limit=2000'),
+        fetch('/tenants'),
+        fetch('/tenant-access'),
+      ]);
+
+      const userSel = document.getElementById('grantUser');
+      if(usersRes.ok){
+        const d = await usersRes.json();
+        const items = Array.isArray(d.items) ? d.items : [];
+        userSel.innerHTML = items.map(u =>
+          `<option value="${u.sub}">${u.display_name || u.preferred_username || u.sub} (${u.email || u.sub})</option>`
+        ).join('');
+      }
+
+      const tenantSel = document.getElementById('grantTenant');
+      if(tenantsRes.ok){
+        const d = await tenantsRes.json();
+        const tenants = Array.isArray(d.tenants) ? d.tenants : [];
+        tenantSel.innerHTML = tenants.map(t => `<option value="${t}">${t}</option>`).join('');
+      }
+
+      if(!grantsRes.ok){
+        tenantAccessBody.innerHTML = `<tr><td colspan="5" style="padding:8px">Failed to load: ${await grantsRes.text()}</td></tr>`;
+        return;
+      }
+      const gd = await grantsRes.json();
+      const grants = Array.isArray(gd.items) ? gd.items : [];
+
+      tenantAccessBody.innerHTML = '';
+      if(grants.length === 0){
+        tenantAccessBody.innerHTML = `<tr><td colspan="5" style="padding:8px">No per-tenant grants yet</td></tr>`;
+      } else {
+        for(const g of grants){
+          const tr = document.createElement('tr');
+          const roleLabel = g.role === 'editor' ? 'Editor (write)' : 'Viewer (read-only)';
+          tr.innerHTML = `
+            <td>${g.display_name || g.user_sub}</td>
+            <td>${g.email || ''}</td>
+            <td>${g.tenant}</td>
+            <td><span class="tag">${roleLabel}</span></td>
+            <td><button type="button" onclick="revokeAccess('${g.user_sub}','${g.tenant}')">Revoke</button></td>`;
+          tenantAccessBody.appendChild(tr);
+        }
+      }
+    }
+
+    document.getElementById('grantForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if(!CAN_AUDIT) return;
+
+      const fd = new FormData();
+      fd.append('user_sub', document.getElementById('grantUser').value);
+      fd.append('tenant', document.getElementById('grantTenant').value);
+      fd.append('role', document.getElementById('grantRole').value);
+
+      const r = await fetch('/tenant-access', { method: 'POST', body: fd });
+      if(!r.ok){ alert('Grant failed: ' + await r.text()); return; }
+      reloadUsers();
+    });
+
+    async function revokeAccess(userSub, tenant){
+      if(!CAN_AUDIT) return;
+      if(!confirm('Revoke this access?')) return;
+      const r = await fetch(`/tenant-access?user_sub=${encodeURIComponent(userSub)}&tenant=${encodeURIComponent(tenant)}`, { method: 'DELETE' });
+      if(!r.ok){ alert('Revoke failed: ' + await r.text()); return; }
+      reloadUsers();
+    }
+
     /* WHOAMI + TENANT */
     async function loadKnownTenants(){
       try{
@@ -977,21 +1115,21 @@
       .then(async (x) => {
         const u = x.user || {};
         ROLE = (u && typeof u === 'object') ? (u.role || '') : '';
-        CAN_WRITE = (ROLE === 'admin' || ROLE === 'editor');
+        EFFECTIVE_ROLE = x.role || ROLE;
+        CAN_WRITE = (EFFECTIVE_ROLE === 'admin' || EFFECTIVE_ROLE === 'editor');
         CAN_AUDIT = (ROLE === 'admin');
 
         const btnAudit = document.getElementById('btnAudit');
         if (btnAudit) btnAudit.style.display = CAN_AUDIT ? 'inline-block' : 'none';
+        const btnUsers = document.getElementById('btnUsers');
+        if (btnUsers) btnUsers.style.display = CAN_AUDIT ? 'inline-block' : 'none';
 
         let name = '-';
         if (typeof u === 'string') name = u;
         else if (u && typeof u === 'object') name = u.display_name || u.name || u.preferred_username || u.email || '-';
         document.getElementById('whoami').textContent = name + (CAN_WRITE ? '' : ' (read-only)');
 
-        if(!CAN_WRITE){
-          document.getElementById('btnCreate').disabled = true;
-          document.getElementById('roHintCreate').style.display = 'inline';
-        }
+        applyWriteUI();
 
         let allowed = Array.isArray(x.allowed_tenants) ? x.allowed_tenants : [];
         const active = (x.active_tenant && String(x.active_tenant).trim()) || (allowed[0] || 'business');
@@ -1025,6 +1163,13 @@
               sel.value = active;
               return;
             }
+            const rd = await rr.json();
+            EFFECTIVE_ROLE = rd.role || EFFECTIVE_ROLE;
+            CAN_WRITE = (EFFECTIVE_ROLE === 'admin' || EFFECTIVE_ROLE === 'editor');
+            document.getElementById('whoami').textContent =
+              document.getElementById('whoami').textContent.replace(/ \(read-only\)$/, '') + (CAN_WRITE ? '' : ' (read-only)');
+            applyWriteUI();
+
             if(!allowed.includes(target)){
               allowed.push(target);
               allowed.sort((a,b)=>a.localeCompare(b));
@@ -1060,6 +1205,9 @@
     window.toggleMetrics = toggleMetrics;
     window.openView = openView;
     window.onFolderPick = onFolderPick;
+    window.openUsers = openUsers;
+    window.closeUsers = closeUsers;
+    window.revokeAccess = revokeAccess;
   </script>
 </body>
 </html>

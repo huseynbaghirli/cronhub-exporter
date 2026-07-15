@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, Response, HTMLResponse
 from apscheduler.triggers.cron import CronTrigger
 
 from ..core.config import TZ
+from ..core.rbac import effective_role_for_tenant
 from ..scheduler import executor as exec_mod
 from ..scheduler.history import history_select, last_results_select
 from ..scheduler.audit import audit_insert, audit_list
@@ -79,9 +80,7 @@ def _actor_info(request: Request):
 
 def _role(request: Request) -> str:
     u = request.session.get("user") or {}
-    if isinstance(u, dict):
-        return (u.get("role") or "").strip()
-    return ""
+    return effective_role_for_tenant(u, _active_tenant(request))
 
 
 def _is_admin(request: Request) -> bool:

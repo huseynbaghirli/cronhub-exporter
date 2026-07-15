@@ -9,6 +9,7 @@ from authlib.integrations.base_client.errors import OAuthError
 
 from ..scheduler.audit import audit_insert
 from ..scheduler.users import users_upsert
+from ..scheduler.tenant_access import tenant_access_list_for_user
 
 from ..core.config import (
     ADMIN_USER,
@@ -22,6 +23,7 @@ from ..core.config import (
     APP_BASE_URL,
 )
 from ..templates.loader import LOGIN_HTML
+from ..core.rbac import effective_role_for_tenant
 
 router = APIRouter()
 
@@ -197,18 +199,7 @@ async def auth_callback(request: Request):
         return HTMLResponse(render_login(msg), status_code=403)
 
     # -------------------------
-    # 2) tenant icazəsi
-    # -------------------------
-    allowed_tenants = _calc_allowed_tenants(groups_norm)
-    if not allowed_tenants:
-        request.session.clear()
-        msg = '<div class="err">Access denied: you have no tenant mapping.</div>'
-        return HTMLResponse(render_login(msg), status_code=403)
-
-    active_tenant = allowed_tenants[0] if allowed_tenants else DEFAULT_TENANT
-
-    # -------------------------
-    # 3) display name
+    # 2) display name
     # -------------------------
     full_name = (userinfo.get("name") or "").strip()
     if not full_name:
@@ -223,9 +214,28 @@ async def auth_callback(request: Request):
         )
 
     # -------------------------
-    # 4) role (MÜTLƏQ təyin olunur)
+    # 3) role (MÜTLƏQ təyin olunur)
     # -------------------------
     role = _calc_role(groups_norm)
+
+    # -------------------------
+    # 4) tenant icazəsi (Keycloak qrup xəritəsi + admin-in verdiyi əlavə
+    #    per-tenant grantlar birləşdirilir)
+    # -------------------------
+    user_sub = str(userinfo.get("sub") or userinfo.get("preferred_username") or full_name)
+    group_tenants = _calc_allowed_tenants(groups_norm)
+    tenant_grants = tenant_access_list_for_user(user_sub)  # {tenant: role}
+
+    allowed_tenants = sorted(set(group_tenants) | set(tenant_grants.keys()))
+    if not allowed_tenants:
+        request.session.clear()
+        msg = '<div class="err">Access denied: you have no tenant mapping.</div>'
+        return HTMLResponse(render_login(msg), status_code=403)
+
+    active_tenant = allowed_tenants[0]
+
+    tenant_roles = {t: role for t in group_tenants}
+    tenant_roles.update(tenant_grants)
 
     session_user = {
         "type": "sso",
@@ -237,6 +247,7 @@ async def auth_callback(request: Request):
         "role": role,
         "groups": sorted(list(groups_norm)),
         "allowed_tenants": allowed_tenants,
+        "tenant_roles": tenant_roles,
     }
     request.session["user"] = session_user
     request.session["active_tenant"] = active_tenant
@@ -329,7 +340,7 @@ async def set_tenant(request: Request, tenant: str = Form(...)):
         meta={"allowed": allowed},
     )
 
-    return {"ok": True, "active_tenant": tenant}
+    return {"ok": True, "active_tenant": tenant, "role": effective_role_for_tenant(user, tenant)}
 
 
 @router.get("/logout")
@@ -352,8 +363,10 @@ async def logout(request: Request):
 @router.get("/whoami")
 def whoami(request: Request):
     user = request.session.get("user") or {}
+    active_tenant = request.session.get("active_tenant") or DEFAULT_TENANT
     return {
         "user": user,
-        "active_tenant": request.session.get("active_tenant") or DEFAULT_TENANT,
+        "active_tenant": active_tenant,
         "allowed_tenants": (user or {}).get("allowed_tenants") or [],
+        "role": effective_role_for_tenant(user, active_tenant),
     }
