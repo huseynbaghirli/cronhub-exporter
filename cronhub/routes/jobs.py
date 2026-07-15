@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, Response, HTMLResponse
 from apscheduler.triggers.cron import CronTrigger
 
 from ..core.config import TZ
+from ..core.rbac import effective_role_for_tenant
 from ..scheduler import executor as exec_mod
 from ..scheduler.history import history_select, last_results_select
 from ..scheduler.audit import audit_insert, audit_list
@@ -79,9 +80,7 @@ def _actor_info(request: Request):
 
 def _role(request: Request) -> str:
     u = request.session.get("user") or {}
-    if isinstance(u, dict):
-        return (u.get("role") or "").strip()
-    return ""
+    return effective_role_for_tenant(u, _active_tenant(request))
 
 
 def _is_admin(request: Request) -> bool:
@@ -231,6 +230,24 @@ def list_jobs(request: Request):
             continue
         out.append(_job_public(j, tenant))
     return JSONResponse(out)
+
+
+@router.get("/tenants")
+def list_tenants(request: Request):
+    tenants = {DEFAULT_TENANT}
+
+    jobs = exec_mod.scheduler.get_jobs() if exec_mod.scheduler else []
+    for j in jobs:
+        t = _job_tenant(j)
+        if t:
+            tenants.add(t)
+
+    user = request.session.get("user") or {}
+    for t in (user.get("allowed_tenants") or []):
+        if isinstance(t, str) and t.strip():
+            tenants.add(t.strip())
+
+    return {"tenants": sorted(tenants)}
 
 
 @router.get("/jobs/{job_id}")
