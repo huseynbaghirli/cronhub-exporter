@@ -77,6 +77,8 @@
 
       <button id="btnUsers" class="iconbtn" type="button" onclick="openUsers()" title="Users" style="display:none">👤 Users</button>
 
+      <button id="btnSshKey" class="iconbtn" type="button" onclick="openSshKey()" title="SSH Key" style="display:none">🔑 SSH Key</button>
+
       <button id="themeToggle" class="iconbtn themeToggle" aria-label="Toggle theme" title="Toggle dark mode" type="button">
         <span id="themeIcon" class="icon">🌙</span><span id="themeText">Dark</span>
       </button>
@@ -449,6 +451,39 @@
         </thead>
         <tbody></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- SSH KEY MODAL -->
+  <div id="sshKeyModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 style="margin:0">SSH Key (for shell jobs)</h3>
+        <button class="iconbtn" type="button" onclick="closeSshKey()" title="Close">✖</button>
+      </div>
+
+      <div class="muted" style="margin-bottom:10px">
+        A keypair is generated automatically the first time the container starts and is stored in the
+        persisted <code>data</code> volume, so it survives redeploys. Use it so shell jobs can
+        <code>ssh</code>/<code>scp</code> without a password prompt.
+      </div>
+
+      <label>Private key path (inside container)</label>
+      <div class="row" style="margin-bottom:10px">
+        <pre id="sshKeyPath" style="flex:1;margin:0">-</pre>
+      </div>
+
+      <label>Public key</label>
+      <div class="row" style="align-items:flex-start;margin-bottom:14px">
+        <pre id="sshPubKey" style="flex:1;margin:0">-</pre>
+        <button class="iconbtn" type="button" onclick="copyText('sshPubKey', this)">📋 Copy</button>
+      </div>
+
+      <label>1. Install the key on a remote host (once per host)</label>
+      <pre id="sshCopyIdCmd">-</pre>
+
+      <label>2. Use it in a shell job command</label>
+      <pre id="sshUsageCmd">-</pre>
     </div>
   </div>
 
@@ -1083,6 +1118,69 @@
       reloadUsers();
     }
 
+    /* COPY HELPER (works over plain HTTP too, not just secure contexts) */
+    function copyText(id, btn){
+      const el = document.getElementById(id);
+      if(!el) return;
+      const text = el.innerText || el.textContent || '';
+
+      function showCopied(){
+        if(!btn) return;
+        const orig = btn.textContent;
+        btn.textContent = '✅ Copied';
+        setTimeout(() => { btn.textContent = orig; }, 1200);
+      }
+
+      function fallbackCopy(){
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try{
+          document.execCommand('copy');
+          showCopied();
+        }catch(e){
+          alert('Copy failed: ' + e);
+        }
+        document.body.removeChild(ta);
+      }
+
+      if(navigator.clipboard && window.isSecureContext){
+        navigator.clipboard.writeText(text).then(showCopied).catch(fallbackCopy);
+      }else{
+        fallbackCopy();
+      }
+    }
+
+    /* SSH KEY MODAL */
+    const sshKeyModal = document.getElementById('sshKeyModal');
+
+    function openSshKey(){
+      if(!CAN_AUDIT) return;
+      reloadSshKey();
+      sshKeyModal.classList.add('show');
+    }
+    function closeSshKey(){ sshKeyModal.classList.remove('show'); }
+
+    async function reloadSshKey(){
+      if(!CAN_AUDIT) return;
+      const r = await fetch('/ssh-key/info');
+      if(!r.ok){
+        document.getElementById('sshPubKey').textContent = 'Failed to load: ' + await r.text();
+        return;
+      }
+      const d = await r.json();
+      document.getElementById('sshKeyPath').textContent = d.private_key_path || '-';
+      document.getElementById('sshPubKey').textContent = d.public_key || '-';
+      document.getElementById('sshCopyIdCmd').textContent =
+        `docker exec -it cronhub ssh-copy-id -i ${d.private_key_path}.pub <user>@<remote-host>`;
+      document.getElementById('sshUsageCmd').textContent =
+        `ssh -i ${d.private_key_path} -o StrictHostKeyChecking=no <user>@<remote-host> "your command here"`;
+    }
+
     /* WHOAMI + TENANT */
     async function loadKnownTenants(){
       try{
@@ -1123,6 +1221,8 @@
         if (btnAudit) btnAudit.style.display = CAN_AUDIT ? 'inline-block' : 'none';
         const btnUsers = document.getElementById('btnUsers');
         if (btnUsers) btnUsers.style.display = CAN_AUDIT ? 'inline-block' : 'none';
+        const btnSshKey = document.getElementById('btnSshKey');
+        if (btnSshKey) btnSshKey.style.display = CAN_AUDIT ? 'inline-block' : 'none';
 
         let name = '-';
         if (typeof u === 'string') name = u;
@@ -1208,6 +1308,9 @@
     window.openUsers = openUsers;
     window.closeUsers = closeUsers;
     window.revokeAccess = revokeAccess;
+    window.openSshKey = openSshKey;
+    window.closeSshKey = closeSshKey;
+    window.copyText = copyText;
   </script>
 </body>
 </html>
