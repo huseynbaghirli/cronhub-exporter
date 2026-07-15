@@ -26,9 +26,9 @@ ENV PATH=${ORACLE_HOME}:${PATH}
 RUN (apt-get install -y libaio1t64 || apt-get install -y libaio1) \
     && apt-get install -y unzip \
     && mkdir -p /opt/oracle \
-    && curl -fsSL -o /tmp/instantclient-basiclite.zip \
+    && curl --connect-timeout 15 --max-time 120 --retry 5 --retry-delay 5 --retry-connrefused -fsSL -o /tmp/instantclient-basiclite.zip \
         https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-basiclite-linux.x64-21.13.0.0.0dbru.zip \
-    && curl -fsSL -o /tmp/instantclient-sqlplus.zip \
+    && curl --connect-timeout 15 --max-time 120 --retry 5 --retry-delay 5 --retry-connrefused -fsSL -o /tmp/instantclient-sqlplus.zip \
         https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-sqlplus-linux.x64-21.13.0.0.0dbru.zip \
     && unzip -q /tmp/instantclient-basiclite.zip -d /opt/oracle \
     && unzip -q /tmp/instantclient-sqlplus.zip -d /opt/oracle \
