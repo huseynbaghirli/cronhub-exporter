@@ -64,6 +64,7 @@
       <div class="tenantbox" id="tenantBox">
         <span class="lbl">Tenant</span>
         <select id="tenantSel"></select>
+        <button id="btnDeleteTenant" class="iconbtn" type="button" onclick="deleteTenant()" title="Delete this tenant" style="display:none">🗑</button>
       </div>
 
       <div class="userbox">
@@ -1229,6 +1230,27 @@
       }
     }
 
+    function updateDeleteTenantBtn(tenant){
+      const btn = document.getElementById('btnDeleteTenant');
+      if(!btn) return;
+      btn.style.display = (ROLE === 'admin' && tenant && tenant !== 'business') ? 'inline-block' : 'none';
+    }
+
+    async function deleteTenant(){
+      if(ROLE !== 'admin') return;
+      const sel = document.getElementById('tenantSel');
+      const tenant = sel.value;
+      if(!tenant || tenant === '__new__' || tenant === 'business') return;
+
+      if(!confirm(`Delete tenant "${tenant}"? This permanently deletes ALL jobs under it. This cannot be undone.`)) return;
+
+      const r = await fetch(`/tenants/${encodeURIComponent(tenant)}`, { method: 'DELETE' });
+      if(!r.ok){ alert('Delete failed: ' + await r.text()); return; }
+      const d = await r.json();
+      alert(`Deleted tenant "${tenant}" (${d.deleted_jobs} job(s) removed).`);
+      location.reload();
+    }
+
     fetch('/whoami')
       .then(r => r.json())
       .then(async (x) => {
@@ -1268,6 +1290,7 @@
         } else {
           box.style.display = 'flex';
           buildTenantSelect(sel, allowed, active);
+          updateDeleteTenantBtn(active);
 
           sel.onchange = async () => {
             let target = sel.value;
@@ -1296,6 +1319,7 @@
               allowed.sort((a,b)=>a.localeCompare(b));
             }
             buildTenantSelect(sel, allowed, target);
+            updateDeleteTenantBtn(target);
             reloadJobs();
           };
         }
@@ -1332,6 +1356,7 @@
     window.openSshKey = openSshKey;
     window.closeSshKey = closeSshKey;
     window.updateSshCommands = updateSshCommands;
+    window.deleteTenant = deleteTenant;
     window.copyText = copyText;
   </script>
 </body>
