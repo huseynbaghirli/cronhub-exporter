@@ -172,6 +172,38 @@ def _ensure_job_tenant(request: Request, job):
         raise HTTPException(404, "Job not found")
 
 
+def _job_name_taken(tenant: str, folder: str, name: str, exclude_id: str | None = None) -> bool:
+    sched = exec_mod.scheduler
+    if not sched:
+        return False
+    folder_norm = (folder or "").strip().lower()
+    name_norm = (name or "").strip().lower()
+    for j in sched.get_jobs():
+        if exclude_id and j.id == exclude_id:
+            continue
+        cfg = j.kwargs.get("config", {}) if j.kwargs else {}
+        if cfg.get("tenant", DEFAULT_TENANT) != tenant:
+            continue
+        if (cfg.get("folder") or "").strip().lower() != folder_norm:
+            continue
+        if (cfg.get("name") or "").strip().lower() == name_norm:
+            return True
+    return False
+
+
+def _unique_job_name(tenant: str, folder: str, base_name: str, exclude_id: str | None = None) -> str:
+    """Appends ' (copy)', ' (copy 2)', ... until the name is unique within
+    the tenant/folder."""
+    if not _job_name_taken(tenant, folder, base_name, exclude_id):
+        return base_name
+    candidate = f"{base_name} (copy)"
+    n = 2
+    while _job_name_taken(tenant, folder, candidate, exclude_id):
+        candidate = f"{base_name} (copy {n})"
+        n += 1
+    return candidate
+
+
 def _parse_bool(v) -> bool:
     if v is None:
         return False
@@ -609,11 +641,15 @@ def create_job(
     except Exception:
         raise HTTPException(400, "retention_days must be a non-negative number")
 
+    folder_norm = (folder or "").strip()
+    if _job_name_taken(tenant, folder_norm, name):
+        raise HTTPException(409, "Already exists: a job with this name already exists in this folder")
+
     job_id = uuid.uuid4().hex
     cfg = {
         "id": job_id,
         "tenant": tenant,
-        "folder": (folder or "").strip(),
+        "folder": folder_norm,
         "name": name,
         "description": description or "",
         "type": t,
@@ -739,6 +775,9 @@ def update_job(
             raise HTTPException(400, "method and url are required (http)")
         cfg.pop("command", None)
 
+    if _job_name_taken(cfg.get("tenant", DEFAULT_TENANT), cfg.get("folder", ""), cfg.get("name", ""), exclude_id=job_id):
+        raise HTTPException(409, "Already exists: a job with this name already exists in this folder")
+
     trigger = None
     if cron is not None:
         try:
@@ -846,7 +885,11 @@ def duplicate_job(request: Request, job_id: str):
     new_id = uuid.uuid4().hex
     new_cfg = dict(src_cfg)
     new_cfg["id"] = new_id
-    new_cfg["name"] = f'{src_cfg.get("name", job_id)} (copy)'
+    new_cfg["name"] = _unique_job_name(
+        src_cfg.get("tenant", DEFAULT_TENANT),
+        src_cfg.get("folder", ""),
+        src_cfg.get("name", job_id),
+    )
 
     # Duplicated jobs start paused so they don't run before you've had a
     # chance to review/edit them.

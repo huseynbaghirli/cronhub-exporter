@@ -128,7 +128,7 @@ def _run_multiline_bash(script_text: str, timeout_s: int) -> tuple[str, str]:
 
         os.chmod(path, 0o700)
 
-        logger.warning("[cronhub] RUN script=%s timeout=%ss", path, timeout_s)
+        logger.info("[cronhub] RUN script=%s timeout=%ss", path, timeout_s)
 
         p = subprocess.run(
             ["/usr/bin/env", "bash", path],
@@ -137,19 +137,27 @@ def _run_multiline_bash(script_text: str, timeout_s: int) -> tuple[str, str]:
             timeout=timeout_s,
         )
 
-        # 🔥 BURASI ƏSAS YERDİR
-        logger.warning("[cronhub] rc=%s script=%s", p.returncode, path)
+        ok = (p.returncode == 0)
+        log = logger.info if ok else logger.warning
+        log("[cronhub] rc=%s script=%s", p.returncode, path)
 
         if p.stdout:
-            logger.warning("[cronhub] STDOUT:\n%s", p.stdout)
+            log("[cronhub] STDOUT:\n%s", p.stdout)
 
         if p.stderr:
-            logger.warning("[cronhub] STDERR:\n%s", p.stderr)
+            log("[cronhub] STDERR:\n%s", p.stderr)
 
         stdout = (p.stdout or "").strip()
-        stderr = (p.stderr or "").strip()
 
-        stderr = (f"[cronhub] rc={p.returncode}\n" + stderr).strip()
+        if ok:
+            # `set -x` always writes a trace of every command to stderr, even
+            # on success - that's debug noise, not a real error. Surfacing it
+            # as the job's error made cronhub_job_success report failure for
+            # every successful shell job.
+            stderr = ""
+        else:
+            stderr = (p.stderr or "").strip()
+            stderr = (f"[cronhub] rc={p.returncode}\n" + stderr).strip()
 
         return stdout, stderr
 
@@ -177,7 +185,7 @@ def _esc(s: str, keep_quotes: bool = True) -> str:
 def execute_job(job_id: str, config: dict):
     name = config.get("name", job_id)
     job_type = config.get("type")
-    timeout_s = int(config.get("timeout", 60 if job_type == "http" else 3600))
+    timeout_s = int(config.get("timeout") or (60 if job_type == "http" else 3600))
     value_regex = config.get("value_regex")
     retention_days = float(config.get("retention_days", 1))
     tenant = config.get("tenant") or "business"
@@ -191,7 +199,8 @@ def execute_job(job_id: str, config: dict):
                 raise ValueError("Shell command is empty")
             output, err = _run_multiline_bash(cmd, timeout_s)
 
-            logger.warning(
+            log = logger.warning if err else logger.info
+            log(
                 "[cronhub] JOB %s finished type=%s output_len=%s error_len=%s",
                 job_id,
                 job_type,
