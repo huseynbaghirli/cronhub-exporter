@@ -735,7 +735,7 @@
       if(!r.ok){ alert('Duplicate failed: ' + await r.text()); return; }
       const data = await r.json();
       await reloadJobs();
-      if(data.id) openEdit(data.id);
+      if(data.id) openEdit(data.id, true);
     }
     async function delJob(id){
       if(!CAN_WRITE) return;
@@ -754,6 +754,7 @@
 
     /* EDIT MODAL */
     let editingId = null;
+    let duplicatePendingId = null; // set while editing a just-created duplicate that hasn't been saved yet
     const editModal = document.getElementById('editModal');
     const editType  = document.getElementById('editType');
     const editShell = document.getElementById('editShell');
@@ -765,13 +766,14 @@
     }
     editType.addEventListener('change', toggleEditType);
 
-    async function openEdit(id){
+    async function openEdit(id, fromDuplicate){
       if(!CAN_WRITE) return;
       const r = await fetch(`/jobs/${id}`);
       if(!r.ok){ alert('Job not found'); return; }
       const j = await r.json();
 
       editingId = id;
+      duplicatePendingId = fromDuplicate ? id : null;
       document.getElementById('editId').value = id;
       document.getElementById('editName').value = j.name || '';
       document.getElementById('editDesc').value = j.description || '';
@@ -797,7 +799,20 @@
       toggleEditType();
       editModal.classList.add('show');
     }
-    function closeEdit(){ editModal.classList.remove('show'); editingId = null; }
+    async function closeEdit(){
+      editModal.classList.remove('show');
+      // Cancelling right after "Duplicate" (never saved) - roll back the copy
+      // instead of leaving an orphaned, unreviewed duplicate behind.
+      if(duplicatePendingId && duplicatePendingId === editingId){
+        const idToRemove = duplicatePendingId;
+        duplicatePendingId = null;
+        editingId = null;
+        await fetch(`/jobs/${idToRemove}`, { method: 'DELETE' });
+        reloadJobs();
+        return;
+      }
+      editingId = null;
+    }
 
     document.getElementById('editForm').addEventListener('submit', async (e)=>{
       e.preventDefault();
@@ -827,6 +842,7 @@
 
       const up = await fetch(`/jobs/${editingId}`, { method:'PUT', body: fd });
       if(!up.ok){ alert('Update failed: '+await errText(up)); return; }
+      duplicatePendingId = null; // saved - keep the duplicate, don't roll it back on close
       closeEdit();
       reloadJobs();
     });
