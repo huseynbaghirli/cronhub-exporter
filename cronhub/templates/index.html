@@ -518,6 +518,16 @@
       if(roHint) roHint.style.display = CAN_WRITE ? 'none' : 'inline';
     }
 
+    async function errText(r){
+      const t = await r.text();
+      try{
+        const d = JSON.parse(t);
+        return d.detail || t;
+      }catch(e){
+        return t;
+      }
+    }
+
     /* THEME */
     const root = document.documentElement;
     const themeToggle = document.getElementById('themeToggle');
@@ -574,7 +584,7 @@
       }
       const fd = new FormData(e.target);
       const r = await fetch('/jobs', { method:'POST', body: fd });
-      if(!r.ok){ alert('Failed to create job: '+await r.text()); return; }
+      if(!r.ok){ alert('Failed to create job: '+await errText(r)); return; }
       e.target.reset(); toggleFields(); reloadJobs();
       setCreateOpen(false);
     });
@@ -816,7 +826,7 @@
       }
 
       const up = await fetch(`/jobs/${editingId}`, { method:'PUT', body: fd });
-      if(!up.ok){ alert('Update failed: '+await up.text()); return; }
+      if(!up.ok){ alert('Update failed: '+await errText(up)); return; }
       closeEdit();
       reloadJobs();
     });
