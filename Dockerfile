@@ -34,12 +34,20 @@ ENV PATH=${ORACLE_HOME}/bin:${PATH}
 RUN (apt-get install -y libaio1t64 || apt-get install -y libaio1) \
     && apt-get install -y unzip \
     && mkdir -p ${ORACLE_HOME}/lib ${ORACLE_HOME}/bin \
-    && curl --connect-timeout 15 --max-time 120 --retry 8 --retry-delay 5 --retry-connrefused -fsSL -o /tmp/instantclient-basic.zip \
-        https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-basic-linux.x64-19.25.0.0.0dbru.zip \
-    && curl --connect-timeout 15 --max-time 120 --retry 8 --retry-delay 5 --retry-connrefused -fsSL -o /tmp/instantclient-sdk.zip \
-        https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-sdk-linux.x64-19.25.0.0.0dbru.zip \
-    && curl --connect-timeout 15 --max-time 120 --retry 8 --retry-delay 5 --retry-connrefused -fsSL -o /tmp/instantclient-sqlplus.zip \
-        https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-sqlplus-linux.x64-19.25.0.0.0dbru.zip \
+    && fetch() { \
+         i=1; \
+         while [ $i -le 12 ]; do \
+           curl --connect-timeout 10 --max-time 90 -fsSL -o "$2" "$1" && return 0; \
+           echo "[oracle-fetch] attempt $i failed for $1, retrying in 4s..."; \
+           i=$((i + 1)); \
+           sleep 4; \
+         done; \
+         echo "[oracle-fetch] giving up on $1 after $((i - 1)) attempts"; \
+         return 1; \
+       } \
+    && fetch https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-basic-linux.x64-19.25.0.0.0dbru.zip /tmp/instantclient-basic.zip \
+    && fetch https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-sdk-linux.x64-19.25.0.0.0dbru.zip /tmp/instantclient-sdk.zip \
+    && fetch https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-sqlplus-linux.x64-19.25.0.0.0dbru.zip /tmp/instantclient-sqlplus.zip \
     && unzip -j -o /tmp/instantclient-basic.zip -d ${ORACLE_HOME}/lib \
     && unzip -j -o /tmp/instantclient-sdk.zip -d ${ORACLE_HOME}/lib \
     && unzip -j -o /tmp/instantclient-sqlplus.zip -d ${ORACLE_HOME}/bin \
