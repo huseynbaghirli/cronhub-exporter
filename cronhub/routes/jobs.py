@@ -16,6 +16,7 @@ from ..scheduler import executor as exec_mod
 from ..scheduler.history import history_select, last_results_select
 from ..scheduler.audit import audit_insert, audit_list
 from ..scheduler.tenant_access import tenant_access_delete_tenant
+from ..scheduler.job_seq import next_job_seq
 
 router = APIRouter()
 
@@ -234,6 +235,7 @@ def _job_public(job, tenant: str):
 
     return {
         "id": job.id,
+        "short_id": cfg.get("short_id"),
         "tenant": cfg.get("tenant", DEFAULT_TENANT),
         "folder": cfg.get("folder", "") or "",
         "name": cfg.get("name", job.id),
@@ -387,6 +389,9 @@ async def import_jobs_json(request: Request, file: UploadFile = File(...)):
             errors.append(f"{job_id}: invalid cron ({e})")
             continue
 
+        if not cfg.get("short_id"):
+            cfg["short_id"] = next_job_seq(job_id)
+
         try:
             exec_mod.scheduler.add_job(
                 exec_mod.execute_job,
@@ -443,6 +448,7 @@ def view_job(request: Request, job_id: str):
         return html.escape("" if x is None else str(x))
 
     t = esc(pj.get("tenant"))
+    short_id = esc(f'#{pj.get("short_id")}' if pj.get("short_id") else "-")
     folder = esc(pj.get("folder") or "-")
     name = esc(pj.get("name") or "-")
     desc = esc(pj.get("description") or "")
@@ -518,6 +524,7 @@ def view_job(request: Request, job_id: str):
     </div>
 
     <div class="row" style="margin-top:12px">
+      <div class="kv"><div class="k">ID</div><div class="v"><span class="pill">{short_id}</span></div></div>
       <div class="kv"><div class="k">Tenant</div><div class="v">{t}</div></div>
       <div class="kv"><div class="k">Folder</div><div class="v">{folder}</div></div>
       <div class="kv"><div class="k">Name</div><div class="v"><strong>{name}</strong></div></div>
@@ -682,6 +689,7 @@ def create_job(
     job_id = uuid.uuid4().hex
     cfg = {
         "id": job_id,
+        "short_id": next_job_seq(job_id),
         "tenant": tenant,
         "folder": folder_norm,
         "name": name,
@@ -919,6 +927,7 @@ def duplicate_job(request: Request, job_id: str):
     new_id = uuid.uuid4().hex
     new_cfg = dict(src_cfg)
     new_cfg["id"] = new_id
+    new_cfg["short_id"] = next_job_seq(new_id)
     new_cfg["name"] = _unique_job_name(
         src_cfg.get("tenant", DEFAULT_TENANT),
         src_cfg.get("folder", ""),

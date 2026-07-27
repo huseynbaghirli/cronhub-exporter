@@ -216,7 +216,7 @@
     <table id="jobsTbl">
       <thead>
         <tr>
-          <th>Folder</th><th>Name</th><th>Description</th><th>Type</th><th>Cron</th>
+          <th>ID</th><th>Folder</th><th>Name</th><th>Description</th><th>Type</th><th>Cron</th>
           <th>Last Value</th><th>Last Time</th><th>On/Off</th><th>Metrics</th><th>Actions</th>
         </tr>
       </thead>
@@ -644,7 +644,7 @@
         // folder header row
         const hdr = document.createElement('tr');
         hdr.innerHTML = `
-          <td colspan="10" style="font-weight:700;cursor:pointer">
+          <td colspan="11" style="font-weight:700;cursor:pointer">
             <span class="tag">📁</span> ${fname}
             <span class="muted" style="margin-left:8px">(${group.length})</span>
           </td>`;
@@ -698,6 +698,7 @@
             : `<span class="tag">${metricsEnabled ? 'ON' : 'OFF'}</span>`;
 
           tr.innerHTML = `
+            <td><span class="tag">${j.short_id ? '#'+j.short_id : '-'}</span></td>
             <td>${(j.folder||'')}</td>
             <td>${j.name}</td>
             <td><span title="${dTitle}">${dShort}</span></td>
