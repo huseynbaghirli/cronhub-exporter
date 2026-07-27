@@ -26,6 +26,11 @@ ENV ORACLE_HOME=/usr/lib/oracle/19.25/client64
 ENV LD_LIBRARY_PATH=${ORACLE_HOME}/lib
 ENV PATH=${ORACLE_HOME}/bin:${PATH}
 
+# vendor/db-arsenal/ is the drop zone for any DB client zips/rpms (see its
+# README) - files placed there are used directly at build time with no
+# network call; anything missing falls back to downloading it below.
+COPY vendor/db-arsenal/ /tmp/db-arsenal/
+
 # sqlplus's zip is extracted to BOTH bin/ (for the executable, on PATH) and
 # lib/ (for libsqlplus*.so, which is only found via LD_LIBRARY_PATH).
 # Debian Trixie's libaio1t64 doesn't ship the libaio.so.1 soname sqlplus
@@ -45,14 +50,26 @@ RUN (apt-get install -y libaio1t64 || apt-get install -y libaio1) \
          echo "[oracle-fetch] giving up on $1 after $((i - 1)) attempts"; \
          return 1; \
        } \
-    && fetch https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-basic-linux.x64-19.25.0.0.0dbru.zip /tmp/instantclient-basic.zip \
-    && fetch https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-sdk-linux.x64-19.25.0.0.0dbru.zip /tmp/instantclient-sdk.zip \
-    && fetch https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-sqlplus-linux.x64-19.25.0.0.0dbru.zip /tmp/instantclient-sqlplus.zip \
-    && unzip -j -o /tmp/instantclient-basic.zip -d ${ORACLE_HOME}/lib \
-    && unzip -j -o /tmp/instantclient-sdk.zip -d ${ORACLE_HOME}/lib \
-    && unzip -j -o /tmp/instantclient-sqlplus.zip -d ${ORACLE_HOME}/bin \
-    && unzip -j -o /tmp/instantclient-sqlplus.zip -d ${ORACLE_HOME}/lib \
-    && rm -f /tmp/instantclient-*.zip \
+    && get() { \
+         if [ -f "/tmp/db-arsenal/$1" ]; then \
+           echo "[oracle-fetch] using vendored /tmp/db-arsenal/$1"; \
+           cp "/tmp/db-arsenal/$1" "/tmp/$1"; \
+         else \
+           echo "[oracle-fetch] $1 not vendored in db-arsenal, downloading..."; \
+           fetch "$2" "/tmp/$1"; \
+         fi \
+       } \
+    && get instantclient-basic-linux.x64-19.25.0.0.0dbru.zip \
+         https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-basic-linux.x64-19.25.0.0.0dbru.zip \
+    && get instantclient-sdk-linux.x64-19.25.0.0.0dbru.zip \
+         https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-sdk-linux.x64-19.25.0.0.0dbru.zip \
+    && get instantclient-sqlplus-linux.x64-19.25.0.0.0dbru.zip \
+         https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-sqlplus-linux.x64-19.25.0.0.0dbru.zip \
+    && unzip -j -o /tmp/instantclient-basic-linux.x64-19.25.0.0.0dbru.zip -d ${ORACLE_HOME}/lib \
+    && unzip -j -o /tmp/instantclient-sdk-linux.x64-19.25.0.0.0dbru.zip -d ${ORACLE_HOME}/lib \
+    && unzip -j -o /tmp/instantclient-sqlplus-linux.x64-19.25.0.0.0dbru.zip -d ${ORACLE_HOME}/bin \
+    && unzip -j -o /tmp/instantclient-sqlplus-linux.x64-19.25.0.0.0dbru.zip -d ${ORACLE_HOME}/lib \
+    && rm -rf /tmp/instantclient-*.zip /tmp/db-arsenal \
     && ln -sf ${ORACLE_HOME}/lib/libclntsh.so.19.1 ${ORACLE_HOME}/lib/libclntsh.so \
     && ln -sf "$(find /usr/lib -name 'libaio.so.*' | head -n 1)" /usr/lib/x86_64-linux-gnu/libaio.so.1 \
     && echo "${ORACLE_HOME}/lib" > /etc/ld.so.conf.d/oracle-instantclient.conf \
