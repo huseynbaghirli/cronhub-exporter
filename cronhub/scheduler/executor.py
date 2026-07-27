@@ -118,11 +118,17 @@ def _run_multiline_bash(script_text: str, timeout_s: int) -> tuple[str, str]:
         with os.fdopen(fd, "w") as f:
             f.write("#!/usr/bin/env bash\n")
             f.write("set -euo pipefail\n")
-            f.write("export PS4='+ [${LINENO}] '\n")
-            f.write("set -x\n")
+            # Trap is registered BEFORE `set -x` so its own definition never
+            # gets traced to stderr - otherwise the literal word "ERROR"
+            # (from the trap's echo command) showed up in every job's
+            # STDERR, even on success, since `set -x` echoes commands as
+            # they execute, including the `trap` builtin call that sets it
+            # up.
             f.write(
                 "trap 'rc=$?; echo \"[cronhub] ERROR rc=$rc line=$LINENO cmd=$BASH_COMMAND\" >&2' ERR\n"
             )
+            f.write("export PS4='+ [${LINENO}] '\n")
+            f.write("set -x\n")
             f.write("\n")
             f.write(script_text.rstrip() + "\n")
 
