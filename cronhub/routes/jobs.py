@@ -465,6 +465,14 @@ def view_job(request: Request, job_id: str):
     extra_labels_dict = pj.get("extra_labels") or {}
     extra_labels = esc(", ".join(f"{k}={v}" for k, v in extra_labels_dict.items()) or "-")
 
+    can_write = _can_write(request)
+    run_now_btn = (
+        "<button class='iconbtn' type='button' id='runNowBtn' "
+        f"onclick=\"runNow('{job_id}', this)\">▶ Run Now</button>"
+        if can_write
+        else ""
+    )
+
     command_block = ""
     if typ == "shell":
         copy_btn = (
@@ -504,6 +512,7 @@ def view_job(request: Request, job_id: str):
       <h2 style="margin:0">View Job</h2>
       <div style="display:flex;gap:8px;align-items:center">
         <a class="iconbtn" href="/" title="Back">← Back</a>
+        {run_now_btn}
         <button class="iconbtn" type="button" onclick="toggleTheme()" title="Toggle theme">🌓</button>
       </div>
     </div>
@@ -529,8 +538,8 @@ def view_job(request: Request, job_id: str):
     </div>
 
     <div class="row" style="margin-top:10px">
-      <div class="kv"><div class="k">Last Value</div><div class="v">{lastv}</div></div>
-      <div class="kv"><div class="k">Last Time</div><div class="v">{lastts}</div></div>
+      <div class="kv"><div class="k">Last Value</div><div class="v" id="lastValue">{lastv}</div></div>
+      <div class="kv"><div class="k">Last Time</div><div class="v" id="lastTime">{lastts}</div></div>
     </div>
 
     <div style="margin-top:12px">
@@ -592,6 +601,31 @@ def view_job(request: Request, job_id: str):
         navigator.clipboard.writeText(text).then(showCopied).catch(fallbackCopy);
       }} else {{
         fallbackCopy();
+      }}
+    }}
+
+    async function runNow(jobId, btn) {{
+      const orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      try {{
+        const r = await fetch(`/jobs/${{jobId}}/run`, {{ method: 'POST' }});
+        if (!r.ok) {{
+          alert('Run failed: ' + await r.text());
+          return;
+        }}
+        setTimeout(async () => {{
+          const jr = await fetch(`/jobs/${{jobId}}`);
+          if (jr.ok) {{
+            const j = await jr.json();
+            const lv = document.getElementById('lastValue');
+            const lt = document.getElementById('lastTime');
+            if (lv) lv.textContent = (j.last && j.last.value != null) ? j.last.value : '';
+            if (lt) lt.textContent = (j.last && j.last.ts) ? new Date(j.last.ts * 1000).toLocaleString() : '';
+          }}
+        }}, 1200);
+      }} finally {{
+        setTimeout(() => {{ btn.disabled = false; btn.textContent = orig; }}, 1200);
       }}
     }}
   </script>
