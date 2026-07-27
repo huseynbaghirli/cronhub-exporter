@@ -26,14 +26,14 @@ SQLITE_FILE = "data/jobs.sqlite"
 # --- Keycloak / OIDC ---
 KEYCLOAK_ENABLED = os.getenv("KEYCLOAK_ENABLED", "true").lower() == "true"
 
-KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL", "https://auth.msolution.az")
-KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "MSolution")
+KEYCLOAK_BASE_URL = os.getenv("KEYCLOAK_BASE_URL", "https://your-keycloak-host")
+KEYCLOAK_REALM = os.getenv("KEYCLOAK_REALM", "your-realm")
 KEYCLOAK_CLIENT_ID = os.getenv("KEYCLOAK_CLIENT_ID", "cronhub")
 KEYCLOAK_CLIENT_SECRET = os.getenv("KEYCLOAK_CLIENT_SECRET", "")
 KEYCLOAK_SCOPES = os.getenv("KEYCLOAK_SCOPES", "openid profile email")
 
 # CronHub public URL (callback üçün)
-APP_BASE_URL = os.getenv("APP_BASE_URL", "https://cronhub.msolution.az")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://your-cronhub-host")
 
 
 
