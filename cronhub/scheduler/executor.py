@@ -330,6 +330,7 @@ def execute_job(job_id: str, config: dict):
 from apscheduler.triggers.cron import CronTrigger
 from ..core.config import TZ, jobstores, job_defaults, AUDIT_RETENTION_DAYS
 from .audit import audit_prune
+from .job_seq import next_job_seq
 
 def _prune_audit_task():
     deleted = audit_prune(AUDIT_RETENTION_DAYS, tenant=None)
@@ -338,6 +339,23 @@ def _prune_audit_task():
         deleted,
         AUDIT_RETENTION_DAYS,
     )
+
+def backfill_missing_short_ids():
+    """One-time-per-job backfill: jobs created before short_id existed (or
+    restored from an older export) get a fresh unique one assigned and saved,
+    so every job - old or new - ends up with one."""
+    if not scheduler:
+        return
+    backfilled = 0
+    for job in scheduler.get_jobs():
+        cfg = job.kwargs.get("config") if job.kwargs else None
+        if not isinstance(cfg, dict) or cfg.get("short_id"):
+            continue
+        cfg["short_id"] = next_job_seq(job.id)
+        scheduler.modify_job(job.id, kwargs={"config": cfg})
+        backfilled += 1
+    if backfilled:
+        logger.warning("[cronhub] backfilled short_id for %s existing job(s)", backfilled)
 
 def init_scheduler():
     global scheduler
@@ -351,6 +369,8 @@ def init_scheduler():
         id="system.audit_prune",
         replace_existing=True,
     )
+
+    backfill_missing_short_ids()
 
 def shutdown_scheduler():
     global scheduler
