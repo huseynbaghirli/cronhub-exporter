@@ -156,6 +156,16 @@
             <textarea name="extra_labels" rows="2" placeholder="env=prod&#10;team=payments"></textarea>
             <div class="muted">Added as extra Prometheus labels on /metrics</div>
           </div>
+
+          <div style="width:140px">
+            <label>Red Threshold</label>
+            <input type="number" step="any" name="threshold_red" placeholder="e.g. 50" />
+          </div>
+
+          <div style="width:140px">
+            <label>Yellow Threshold</label>
+            <input type="number" step="any" name="threshold_yellow" placeholder="e.g. 40" />
+          </div>
         </div>
 
         <div id="shellFields" class="row" style="margin-top:8px">
@@ -295,6 +305,16 @@
           <div style="flex:1;min-width:260px">
             <label>Extra Labels (one per line, key=value)</label>
             <textarea id="editExtraLabels" rows="2" placeholder="env=prod&#10;team=payments"></textarea>
+          </div>
+
+          <div style="width:140px">
+            <label>Red Threshold</label>
+            <input type="number" step="any" id="editThresholdRed" placeholder="e.g. 50" />
+          </div>
+
+          <div style="width:140px">
+            <label>Yellow Threshold</label>
+            <input type="number" step="any" id="editThresholdYellow" placeholder="e.g. 40" />
           </div>
         </div>
 
@@ -796,6 +816,9 @@
       const extraLabels = j.extra_labels || {};
       document.getElementById('editExtraLabels').value = Object.entries(extraLabels).map(([k,v]) => `${k}=${v}`).join('\n');
 
+      document.getElementById('editThresholdRed').value = j.threshold_red ?? '';
+      document.getElementById('editThresholdYellow').value = j.threshold_yellow ?? '';
+
       toggleEditType();
       editModal.classList.add('show');
     }
@@ -830,6 +853,8 @@
       fd.append('retention_days', document.getElementById('editRetention').value || '1');
       fd.append('metrics_enabled', document.getElementById('editMetrics').checked ? '1' : '0');
       fd.append('extra_labels', document.getElementById('editExtraLabels').value);
+      fd.append('threshold_red', document.getElementById('editThresholdRed').value.trim());
+      fd.append('threshold_yellow', document.getElementById('editThresholdYellow').value.trim());
 
       if(document.getElementById('editType').value === 'shell'){
         fd.append('command', document.getElementById('editCommand').value);

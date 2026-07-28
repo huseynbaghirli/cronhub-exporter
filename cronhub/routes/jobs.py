@@ -212,6 +212,15 @@ def _parse_bool(v) -> bool:
     return s in ("1", "true", "on", "yes", "y")
 
 
+def _parse_threshold(v):
+    if v is None or str(v).strip() == "":
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "threshold must be a number")
+
+
 def _get_last(tenant: str, job_id: str):
     last = exec_mod.LAST_RESULTS.get(job_id)
     if last and (last.get("tenant") == tenant):
@@ -247,6 +256,8 @@ def _job_public(job, tenant: str):
         "retention_days": cfg.get("retention_days", 1),
         "metrics_enabled": bool(cfg.get("metrics_enabled", False)),
         "extra_labels": cfg.get("extra_labels", {}) or {},
+        "threshold_red": cfg.get("threshold_red"),
+        "threshold_yellow": cfg.get("threshold_yellow"),
         "command": cfg.get("command"),
         "method": cfg.get("method"),
         "url": cfg.get("url"),
@@ -665,6 +676,8 @@ def create_job(
     retention_days: str = Form("1"),
     metrics_enabled: str = Form(None),
     extra_labels: str = Form(None),
+    threshold_red: str = Form(None),
+    threshold_yellow: str = Form(None),
 ):
     _require_write(request)
 
@@ -707,6 +720,8 @@ def create_job(
         "retention_days": rd,
         "metrics_enabled": _parse_bool(metrics_enabled),
         "extra_labels": _parse_extra_labels(extra_labels),
+        "threshold_red": _parse_threshold(threshold_red),
+        "threshold_yellow": _parse_threshold(threshold_yellow),
     }
 
     if t == "shell":
@@ -750,6 +765,8 @@ def update_job(
     retention_days: str = Form(None),
     metrics_enabled: str = Form(None),
     extra_labels: str = Form(None),
+    threshold_red: str = Form(None),
+    threshold_yellow: str = Form(None),
 ):
     _require_write(request)
 
@@ -798,6 +815,12 @@ def update_job(
 
     if extra_labels is not None:
         cfg["extra_labels"] = _parse_extra_labels(extra_labels)
+
+    if threshold_red is not None:
+        cfg["threshold_red"] = _parse_threshold(threshold_red)
+
+    if threshold_yellow is not None:
+        cfg["threshold_yellow"] = _parse_threshold(threshold_yellow)
 
     t = cfg.get("type")
     if t not in ("shell", "http"):
@@ -1084,6 +1107,20 @@ def metrics():
 
         if last.get("value") is not None:
             lines.append(f'cronhub_job_value{{{base_labels}}} {float(last["value"])}')
+
+        thr_red = cfg.get("threshold_red")
+        if thr_red is not None:
+            try:
+                lines.append(f'cronhub_job_threshold_red{{{base_labels}}} {float(thr_red)}')
+            except (TypeError, ValueError):
+                pass
+
+        thr_yellow = cfg.get("threshold_yellow")
+        if thr_yellow is not None:
+            try:
+                lines.append(f'cronhub_job_threshold_yellow{{{base_labels}}} {float(thr_yellow)}')
+            except (TypeError, ValueError):
+                pass
 
         metrics_map = last.get("metrics") or {}
         for k, v in metrics_map.items():
