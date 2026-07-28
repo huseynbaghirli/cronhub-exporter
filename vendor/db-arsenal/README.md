@@ -13,15 +13,12 @@ later.
 
 ## Current contents
 
+- `instantclient-basic-linux.x64-19.25.0.0.0dbru.zip` - Oracle Instant Client 19.25 core (`libclntsh.so.19.1` and friends)
 - `instantclient-sdk-linux.x64-19.25.0.0.0dbru.zip` - Oracle Instant Client 19.25 SDK
 - `instantclient-sqlplus-linux.x64-19.25.0.0.0dbru.zip` - Oracle Instant Client 19.25 SQL*Plus
 
-**Still missing:** `instantclient-basic-linux.x64-19.25.0.0.0dbru.zip` - this is
-the core package (`libclntsh.so.19.1` and friends) that both of the above
-depend on. Without it the build falls back to downloading it from
-`download.oracle.com`, which may or may not succeed depending on network
-routing at build time. Drop it in here (same filename) to make the build
-fully self-contained.
+All three packages the Dockerfile needs are present, so `docker build` no
+longer needs any network access to `download.oracle.com`.
 
-Download link (same version, if you need to fetch it again):
-https://download.oracle.com/otn_software/linux/instantclient/1925000/instantclient-basic-linux.x64-19.25.0.0.0dbru.zip
+Download link (same version, if any of these ever need to be refreshed):
+https://download.oracle.com/otn_software/linux/instantclient/1925000/
