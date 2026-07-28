@@ -670,7 +670,7 @@
           const lastVal = (j.last && j.last.value != null) ? j.last.value : '';
           const lastTs = (j.last && j.last.ts) ? new Date(j.last.ts*1000).toLocaleString() : '';
 
-          const viewBtn = `<button type="button" onclick="openView('${j.id}')">View</button>`;
+          const viewBtn = `<button type="button" onclick="openView('${j.id}')">${CAN_WRITE ? 'View/Edit' : 'View'}</button>`;
           const histBtn = `<button type="button" onclick="openHistory('${j.id}','${(j.name||j.id).replaceAll('"','&quot;')}')">History</button>`;
 
           let actionsHtml = `${viewBtn} ${histBtn}`;
@@ -678,7 +678,6 @@
             actionsHtml += `
               <button type="button" onclick="runNow('${j.id}')">Run Now</button>
               <button type="button" onclick="duplicateJob('${j.id}')">Duplicate</button>
-              <button type="button" onclick="openEdit('${j.id}')">Edit</button>
               <button type="button" onclick="delJob('${j.id}')">Delete</button>
             `;
           }
@@ -1396,7 +1395,8 @@
           };
         }
 
-        reloadJobs();
+        await reloadJobs();
+        openEditFromQuery();
       })
       .catch(() => {
         document.getElementById('whoami').textContent = '-';
@@ -1404,6 +1404,15 @@
         if (box) box.style.display = 'none';
         reloadJobs();
       });
+
+    // Coming back from the View Job page's Edit button: /?edit=<jobId>
+    function openEditFromQuery(){
+      const params = new URLSearchParams(location.search);
+      const editId = params.get('edit');
+      if(!editId) return;
+      history.replaceState(null, '', location.pathname);
+      if(CAN_WRITE) openEdit(editId);
+    }
 
     // expose
     window.reloadJobs = reloadJobs;

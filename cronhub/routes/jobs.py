@@ -478,6 +478,11 @@ def view_job(request: Request, job_id: str):
         if can_write
         else ""
     )
+    edit_btn = (
+        f"<a class='iconbtn' href=\"/?edit={job_id}\">✏️ Edit</a>"
+        if can_write
+        else ""
+    )
 
     command_block = ""
     if typ == "shell":
@@ -519,6 +524,7 @@ def view_job(request: Request, job_id: str):
       <div style="display:flex;gap:8px;align-items:center">
         <a class="iconbtn" href="/" title="Back">← Back</a>
         {run_now_btn}
+        {edit_btn}
         <button class="iconbtn" type="button" onclick="toggleTheme()" title="Toggle theme">🌓</button>
       </div>
     </div>
