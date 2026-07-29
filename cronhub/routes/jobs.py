@@ -481,6 +481,8 @@ def view_job(request: Request, job_id: str):
     body = esc(pj.get("body") or "")
     extra_labels_dict = pj.get("extra_labels") or {}
     extra_labels = esc(", ".join(f"{k}={v}" for k, v in extra_labels_dict.items()) or "-")
+    threshold_red = esc(pj.get("threshold_red") if pj.get("threshold_red") is not None else "-")
+    threshold_yellow = esc(pj.get("threshold_yellow") if pj.get("threshold_yellow") is not None else "-")
 
     can_write = _can_write(request)
     run_now_btn = (
@@ -559,6 +561,8 @@ def view_job(request: Request, job_id: str):
       <div class="kv"><div class="k">On/Off</div><div class="v">{paused}</div></div>
       <div class="kv"><div class="k">Metrics</div><div class="v">{metrics}</div></div>
       <div class="kv"><div class="k">Extra Labels</div><div class="v">{extra_labels}</div></div>
+      <div class="kv"><div class="k">Red Threshold</div><div class="v">{threshold_red}</div></div>
+      <div class="kv"><div class="k">Yellow Threshold</div><div class="v">{threshold_yellow}</div></div>
     </div>
 
     <div class="row" style="margin-top:10px">
