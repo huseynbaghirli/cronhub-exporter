@@ -23,7 +23,7 @@ router = APIRouter()
 DEFAULT_TENANT = "business"
 
 LABEL_KEY_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
-RESERVED_LABEL_KEYS = {"job_id", "job_name", "tenant", "folder", "subjob", "list"}
+RESERVED_LABEL_KEYS = {"job_id", "short_id", "job_name", "tenant", "folder", "subjob", "list"}
 
 
 def _parse_extra_labels(text: str | None) -> dict[str, str]:
@@ -1095,12 +1095,14 @@ def metrics():
         if not last:
             continue
 
+        short_id = cfg.get("short_id")
         extra_labels = cfg.get("extra_labels") or {}
         extra_labels_str = "".join(
             f',{k}="{exec_mod._esc(str(v))}"' for k, v in extra_labels.items()
         )
         base_labels = (
-            f'job_id="{job_id}",job_name="{exec_mod._esc(name)}",'
+            f'job_id="{job_id}",short_id="{short_id if short_id is not None else ""}",'
+            f'job_name="{exec_mod._esc(name)}",'
             f'tenant="{exec_mod._esc(str(tenant))}",folder="{exec_mod._esc(str(folder))}"'
             f'{extra_labels_str}'
         )
