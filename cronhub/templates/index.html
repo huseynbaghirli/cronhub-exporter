@@ -32,7 +32,11 @@
     .modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:50}
     .modal.show{display:flex}
     .modal-card{width:min(980px,94vw);background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
-    #editModal .modal-card{width:min(1280px,96vw);max-height:92vh;overflow-y:auto}
+    #editModal .modal-card{width:min(1120px,95vw);max-height:88vh;overflow-y:auto}
+    .thr-input-red{border-color:#dc2626 !important;background:rgba(220,38,38,.08) !important;color:#dc2626 !important;font-weight:600}
+    .thr-input-yellow{border-color:#d97706 !important;background:rgba(217,119,6,.08) !important;color:#d97706 !important;font-weight:600}
+    .thr-label-red{color:#dc2626 !important;font-weight:600}
+    .thr-label-yellow{color:#d97706 !important;font-weight:600}
     .modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
     .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
     .tabs{display:flex;gap:8px;margin-bottom:12px}
@@ -159,13 +163,13 @@
           </div>
 
           <div style="width:140px">
-            <label>Red Threshold</label>
-            <input type="number" step="any" name="threshold_red" placeholder="e.g. 50" />
+            <label class="thr-label-red">🔴 Red Threshold</label>
+            <input type="number" step="any" name="threshold_red" class="thr-input-red" placeholder="e.g. 50" />
           </div>
 
           <div style="width:140px">
-            <label>Yellow Threshold</label>
-            <input type="number" step="any" name="threshold_yellow" placeholder="e.g. 40" />
+            <label class="thr-label-yellow">🟡 Yellow Threshold</label>
+            <input type="number" step="any" name="threshold_yellow" class="thr-input-yellow" placeholder="e.g. 40" />
           </div>
         </div>
 
@@ -309,13 +313,13 @@
           </div>
 
           <div style="width:140px">
-            <label>Red Threshold</label>
-            <input type="number" step="any" id="editThresholdRed" placeholder="e.g. 50" />
+            <label class="thr-label-red">🔴 Red Threshold</label>
+            <input type="number" step="any" id="editThresholdRed" class="thr-input-red" placeholder="e.g. 50" />
           </div>
 
           <div style="width:140px">
-            <label>Yellow Threshold</label>
-            <input type="number" step="any" id="editThresholdYellow" placeholder="e.g. 40" />
+            <label class="thr-label-yellow">🟡 Yellow Threshold</label>
+            <input type="number" step="any" id="editThresholdYellow" class="thr-input-yellow" placeholder="e.g. 40" />
           </div>
         </div>
 

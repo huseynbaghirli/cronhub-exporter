@@ -526,6 +526,8 @@ def view_job(request: Request, job_id: str):
     .v{{font-size:14px;word-break:break-word}}
     pre{{background:var(--bg);border:1px solid var(--line);color:var(--fg);padding:12px;border-radius:10px;overflow:auto}}
     .pill{{display:inline-block;padding:2px 10px;border-radius:999px;background:var(--chipbg);color:var(--chipfg);font-size:12px}}
+    .pill-red{{display:inline-block;padding:2px 10px;border-radius:999px;background:rgba(220,38,38,.12);color:#dc2626;font-size:12px;font-weight:600}}
+    .pill-yellow{{display:inline-block;padding:2px 10px;border-radius:999px;background:rgba(217,119,6,.12);color:#d97706;font-size:12px;font-weight:600}}
     .iconbtn{{background:transparent;border:1px solid var(--line);color:var(--fg);border-radius:10px;padding:8px 12px;cursor:pointer;text-decoration:none}}
     .top{{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}}
   </style>
@@ -561,8 +563,8 @@ def view_job(request: Request, job_id: str):
       <div class="kv"><div class="k">On/Off</div><div class="v">{paused}</div></div>
       <div class="kv"><div class="k">Metrics</div><div class="v">{metrics}</div></div>
       <div class="kv"><div class="k">Extra Labels</div><div class="v">{extra_labels}</div></div>
-      <div class="kv"><div class="k">Red Threshold</div><div class="v">{threshold_red}</div></div>
-      <div class="kv"><div class="k">Yellow Threshold</div><div class="v">{threshold_yellow}</div></div>
+      <div class="kv"><div class="k">🔴 Red Threshold</div><div class="v"><span class="pill-red">{threshold_red}</span></div></div>
+      <div class="kv"><div class="k">🟡 Yellow Threshold</div><div class="v"><span class="pill-yellow">{threshold_yellow}</span></div></div>
     </div>
 
     <div class="row" style="margin-top:10px">
