@@ -256,7 +256,10 @@
   <div id="editModal" class="modal" role="dialog" aria-modal="true">
     <div class="modal-card">
       <div class="modal-head">
-        <h3 style="margin:0">Edit Job</h3>
+        <div style="display:flex;align-items:center;gap:10px">
+          <h3 style="margin:0">Edit Job</h3>
+          <span class="tag" id="editIdPill" title="Job ID (auto-assigned, read-only)">-</span>
+        </div>
         <button class="iconbtn" type="button" onclick="closeEdit()" title="Close">✖</button>
       </div>
 
@@ -915,6 +918,7 @@
       editingId = id;
       duplicatePendingId = fromDuplicate ? id : null;
       document.getElementById('editId').value = id;
+      document.getElementById('editIdPill').textContent = j.short_id ? '#'+j.short_id : '-';
       document.getElementById('editName').value = j.name || '';
       document.getElementById('editDesc').value = j.description || '';
       document.getElementById('editFolder').value = j.folder || '';
