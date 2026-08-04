@@ -284,6 +284,7 @@ def _job_public(job, tenant: str):
     return {
         "id": job.id,
         "short_id": cfg.get("short_id"),
+        "created_at": cfg.get("created_at"),
         "tenant": cfg.get("tenant", DEFAULT_TENANT),
         "folder": cfg.get("folder", "") or "",
         "name": cfg.get("name", job.id),
@@ -443,6 +444,9 @@ async def import_jobs_json(request: Request, file: UploadFile = File(...)):
         if not cfg.get("short_id"):
             cfg["short_id"] = next_job_seq(job_id)
 
+        if not cfg.get("created_at"):
+            cfg["created_at"] = time.time()
+
         try:
             exec_mod.scheduler.add_job(
                 exec_mod.execute_job,
@@ -510,6 +514,12 @@ def view_job(request: Request, job_id: str):
     retention = esc(pj.get("retention_days") or "")
     paused = "OFF" if pj.get("paused") else "ON"
     metrics = "ON" if pj.get("metrics_enabled") else "OFF"
+    created_ts = pj.get("created_at")
+    created = esc(
+        datetime.fromtimestamp(created_ts, TZ).strftime("%Y-%m-%d %H:%M:%S")
+        if created_ts
+        else "-"
+    )
     lastv = esc((pj.get("last") or {}).get("value"))
     lastts = (pj.get("last") or {}).get("ts")
     lastts = esc(datetime.fromtimestamp(lastts, TZ).isoformat() if lastts else "")
@@ -594,6 +604,7 @@ def view_job(request: Request, job_id: str):
       <div class="kv"><div class="k">Tenant</div><div class="v">{t}</div></div>
       <div class="kv"><div class="k">Folder</div><div class="v">{folder}</div></div>
       <div class="kv"><div class="k">Name</div><div class="v"><strong>{name}</strong></div></div>
+      <div class="kv"><div class="k">Created</div><div class="v">{created}</div></div>
     </div>
 
     <div class="row" style="margin-top:10px">
@@ -762,6 +773,7 @@ def create_job(
     cfg = {
         "id": job_id,
         "short_id": next_job_seq(job_id),
+        "created_at": time.time(),
         "tenant": tenant,
         "folder": folder_norm,
         "name": name,
@@ -1059,6 +1071,7 @@ def duplicate_job(request: Request, job_id: str):
     new_cfg = dict(src_cfg)
     new_cfg["id"] = new_id
     new_cfg["short_id"] = next_job_seq(new_id)
+    new_cfg["created_at"] = time.time()
     new_cfg["name"] = _unique_job_name(
         src_cfg.get("tenant", DEFAULT_TENANT),
         src_cfg.get("folder", ""),
