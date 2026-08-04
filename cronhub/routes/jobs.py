@@ -111,6 +111,7 @@ IMPORTANT_AUDIT_ACTIONS = {
     "job.pause",
     "job.resume",
     "job.run_now",
+    "job.run_now_bulk",
     "job.metrics_toggle",
     "job.duplicate",
     "tenant.delete",
@@ -221,6 +222,44 @@ def _parse_threshold(v):
         raise HTTPException(400, "threshold must be a number")
 
 
+def _parse_threshold_direction(v) -> str:
+    """'above' = higher is worse (default), 'below' = lower is worse."""
+    if v is None or str(v).strip() == "":
+        return "above"
+    s = str(v).strip().lower()
+    if s not in ("above", "below"):
+        raise HTTPException(400, "threshold_direction must be above|below")
+    return s
+
+
+def _job_status(value, red, yellow, direction: str):
+    """Severity of a job's last value against its own thresholds:
+    0 = OK, 1 = WARNING (yellow), 2 = CRITICAL (red).
+
+    Computed here rather than in the dashboard so that a single panel can
+    mix 'higher is worse' and 'lower is worse' jobs - Grafana threshold
+    steps are panel-wide and always ascending, so they can't express both.
+    """
+    if value is None or (red is None and yellow is None):
+        return None
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    if direction == "below":
+        if red is not None and v <= float(red):
+            return 2
+        if yellow is not None and v <= float(yellow):
+            return 1
+    else:
+        if red is not None and v >= float(red):
+            return 2
+        if yellow is not None and v >= float(yellow):
+            return 1
+    return 0
+
+
 def _get_last(tenant: str, job_id: str):
     last = exec_mod.LAST_RESULTS.get(job_id)
     if last and (last.get("tenant") == tenant):
@@ -258,6 +297,7 @@ def _job_public(job, tenant: str):
         "extra_labels": cfg.get("extra_labels", {}) or {},
         "threshold_red": cfg.get("threshold_red"),
         "threshold_yellow": cfg.get("threshold_yellow"),
+        "threshold_direction": cfg.get("threshold_direction") or "above",
         "command": cfg.get("command"),
         "method": cfg.get("method"),
         "url": cfg.get("url"),
@@ -483,6 +523,11 @@ def view_job(request: Request, job_id: str):
     extra_labels = esc(", ".join(f"{k}={v}" for k, v in extra_labels_dict.items()) or "-")
     threshold_red = esc(pj.get("threshold_red") if pj.get("threshold_red") is not None else "-")
     threshold_yellow = esc(pj.get("threshold_yellow") if pj.get("threshold_yellow") is not None else "-")
+    threshold_direction = (
+        "↓ Below (lower is worse)"
+        if pj.get("threshold_direction") == "below"
+        else "↑ Above (higher is worse)"
+    )
 
     can_write = _can_write(request)
     run_now_btn = (
@@ -565,6 +610,7 @@ def view_job(request: Request, job_id: str):
       <div class="kv"><div class="k">Extra Labels</div><div class="v">{extra_labels}</div></div>
       <div class="kv"><div class="k">🔴 Red Threshold</div><div class="v"><span class="pill-red">{threshold_red}</span></div></div>
       <div class="kv"><div class="k">🟡 Yellow Threshold</div><div class="v"><span class="pill-yellow">{threshold_yellow}</span></div></div>
+      <div class="kv"><div class="k">Threshold Direction</div><div class="v"><span class="pill">{threshold_direction}</span></div></div>
     </div>
 
     <div class="row" style="margin-top:10px">
@@ -684,6 +730,7 @@ def create_job(
     extra_labels: str = Form(None),
     threshold_red: str = Form(None),
     threshold_yellow: str = Form(None),
+    threshold_direction: str = Form(None),
 ):
     _require_write(request)
 
@@ -728,6 +775,7 @@ def create_job(
         "extra_labels": _parse_extra_labels(extra_labels),
         "threshold_red": _parse_threshold(threshold_red),
         "threshold_yellow": _parse_threshold(threshold_yellow),
+        "threshold_direction": _parse_threshold_direction(threshold_direction),
     }
 
     if t == "shell":
@@ -773,6 +821,7 @@ def update_job(
     extra_labels: str = Form(None),
     threshold_red: str = Form(None),
     threshold_yellow: str = Form(None),
+    threshold_direction: str = Form(None),
 ):
     _require_write(request)
 
@@ -827,6 +876,9 @@ def update_job(
 
     if threshold_yellow is not None:
         cfg["threshold_yellow"] = _parse_threshold(threshold_yellow)
+
+    if threshold_direction is not None:
+        cfg["threshold_direction"] = _parse_threshold_direction(threshold_direction)
 
     t = cfg.get("type")
     if t not in ("shell", "http"):
@@ -940,6 +992,50 @@ def run_now(request: Request, job_id: str):
 
     _audit(request, "job.run_now", tenant=tenant, target_type="job", target_id=job_id, ok=True)
     return {"ok": True}
+
+
+@router.post("/jobs/run-bulk")
+def run_now_bulk(request: Request, job_ids: str = Form(...)):
+    """Fires several jobs at once - one request instead of one per job, so
+    kicking off everything after a restart doesn't mean clicking Run Now
+    down the whole list."""
+    _require_write(request)
+
+    tenant = _active_tenant(request)
+    ids = [s.strip() for s in (job_ids or "").split(",") if s.strip()]
+    if not ids:
+        raise HTTPException(400, "job_ids is required")
+
+    started, skipped = [], []
+    for job_id in ids:
+        j = exec_mod.scheduler.get_job(job_id)
+        if not j:
+            skipped.append(job_id)
+            continue
+        cfg = j.kwargs.get("config", {}) if j.kwargs else {}
+        if (cfg.get("tenant") or DEFAULT_TENANT) != tenant:
+            skipped.append(job_id)
+            continue
+
+        exec_mod.scheduler.add_job(
+            exec_mod.execute_job,
+            trigger="date",
+            run_date=datetime.now(TZ),
+            args=[job_id],
+            kwargs={"config": cfg},
+        )
+        started.append(job_id)
+
+    _audit(
+        request,
+        "job.run_now_bulk",
+        tenant=tenant,
+        target_type="job",
+        target_id=",".join(started)[:500],
+        ok=True,
+        msg=f"started={len(started)} skipped={len(skipped)}",
+    )
+    return {"ok": True, "started": len(started), "skipped": len(skipped)}
 
 
 @router.post("/jobs/{job_id}/duplicate")
@@ -1129,6 +1225,17 @@ def metrics():
                 lines.append(f'cronhub_job_threshold_yellow{{{base_labels}}} {float(thr_yellow)}')
             except (TypeError, ValueError):
                 pass
+
+        # 0 = above (higher is worse), 1 = below (lower is worse)
+        direction = cfg.get("threshold_direction") or "above"
+        if thr_red is not None or thr_yellow is not None:
+            lines.append(
+                f'cronhub_job_threshold_direction{{{base_labels}}} {1 if direction == "below" else 0}'
+            )
+
+        status = _job_status(last.get("value"), thr_red, thr_yellow, direction)
+        if status is not None:
+            lines.append(f'cronhub_job_status{{{base_labels}}} {status}')
 
         metrics_map = last.get("metrics") or {}
         for k, v in metrics_map.items():

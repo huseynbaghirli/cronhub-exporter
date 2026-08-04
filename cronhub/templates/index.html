@@ -171,6 +171,14 @@
             <label class="thr-label-yellow">🟡 Yellow Threshold</label>
             <input type="number" step="any" name="threshold_yellow" class="thr-input-yellow" placeholder="e.g. 40" />
           </div>
+
+          <div style="width:200px">
+            <label>Threshold Direction</label>
+            <select name="threshold_direction">
+              <option value="above">↑ Above (higher is worse)</option>
+              <option value="below">↓ Below (lower is worse)</option>
+            </select>
+          </div>
         </div>
 
         <div id="shellFields" class="row" style="margin-top:8px">
@@ -220,7 +228,9 @@
   <div class="card">
     <div style="display:flex;justify-content:space-between;align-items:center">
       <h3>Jobs</h3>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="selCount" class="muted" style="display:none"></span>
+        <button id="btnRunSelected" type="button" class="iconbtn" onclick="runSelected()" title="Run all selected jobs now" style="display:none">▶ Run Selected</button>
         <button id="btnExportJobs" type="button" class="iconbtn" onclick="exportJobs()" title="Export all jobs (all tenants) as JSON" style="display:none">⬇️ Export</button>
         <button id="btnImportJobs" type="button" class="iconbtn" onclick="document.getElementById('importJobsFile').click()" title="Import jobs from a JSON export" style="display:none">⬆️ Import</button>
         <input id="importJobsFile" type="file" accept="application/json" style="display:none" onchange="importJobs(this)" />
@@ -231,6 +241,7 @@
     <table id="jobsTbl">
       <thead>
         <tr>
+          <th id="selAllHead" style="display:none;width:32px"><input type="checkbox" id="selAll" onchange="toggleSelectAll(this)" style="width:auto" title="Select all" /></th>
           <th>ID</th><th>Folder</th><th>Name</th><th>Description</th><th>Type</th><th>Cron</th>
           <th>Last Value</th><th>Last Time</th><th>On/Off</th><th>Metrics</th><th>Actions</th>
         </tr>
@@ -320,6 +331,14 @@
           <div style="width:140px">
             <label class="thr-label-yellow">🟡 Yellow Threshold</label>
             <input type="number" step="any" id="editThresholdYellow" class="thr-input-yellow" placeholder="e.g. 40" />
+          </div>
+
+          <div style="width:200px">
+            <label>Threshold Direction</label>
+            <select id="editThresholdDirection">
+              <option value="above">↑ Above (higher is worse)</option>
+              <option value="below">↓ Below (lower is worse)</option>
+            </select>
           </div>
         </div>
 
@@ -541,6 +560,8 @@
       const roHint = document.getElementById('roHintCreate');
       if(btnCreate) btnCreate.disabled = !CAN_WRITE;
       if(roHint) roHint.style.display = CAN_WRITE ? 'none' : 'inline';
+      const selAllHead = document.getElementById('selAllHead');
+      if(selAllHead) selAllHead.style.display = CAN_WRITE ? '' : 'none';
     }
 
     async function errText(r){
@@ -695,7 +716,7 @@
         // folder header row
         const hdr = document.createElement('tr');
         hdr.innerHTML = `
-          <td colspan="11" style="font-weight:700;cursor:pointer">
+          <td colspan="${CAN_WRITE ? 12 : 11}" style="font-weight:700;cursor:pointer">
             <span class="tag">📁</span> ${fname}
             <span class="muted" style="margin-left:8px">(${group.length})</span>
           </td>`;
@@ -747,7 +768,12 @@
                </label>`
             : `<span class="tag">${metricsEnabled ? 'ON' : 'OFF'}</span>`;
 
+          const selCell = CAN_WRITE
+            ? `<td><input type="checkbox" class="jobSel" value="${j.id}" onchange="updateSelCount()" style="width:auto"></td>`
+            : '';
+
           tr.innerHTML = `
+            ${selCell}
             <td><span class="tag">${j.short_id ? '#'+j.short_id : '-'}</span></td>
             <td>${(j.folder||'')}</td>
             <td>${j.name}</td>
@@ -764,6 +790,8 @@
           tr.style.display = open ? '' : 'none';
         }
       }
+
+      updateSelCount(); // rows were rebuilt, so any prior selection is gone
     }
 
     function openView(id){
@@ -779,6 +807,59 @@
       if(!CAN_WRITE) return;
       await fetch(`/jobs/${id}/run`, {method:'POST'});
       setTimeout(reloadJobs, 800);
+    }
+
+    /* BULK RUN - tick the jobs you want and fire them in one go, instead of
+       hitting Run Now down the whole list after a restart. */
+    function selectedJobIds(){
+      return [...document.querySelectorAll('.jobSel:checked')].map(c => c.value);
+    }
+    function updateSelCount(){
+      const n = selectedJobIds().length;
+      const btn = document.getElementById('btnRunSelected');
+      const lbl = document.getElementById('selCount');
+      if(btn) btn.style.display = n ? 'inline-block' : 'none';
+      if(lbl){
+        lbl.style.display = n ? 'inline' : 'none';
+        lbl.textContent = `${n} selected`;
+      }
+      const all = document.getElementById('selAll');
+      const boxes = document.querySelectorAll('.jobSel');
+      if(all) all.checked = boxes.length > 0 && n === boxes.length;
+    }
+    function toggleSelectAll(el){
+      // only the rows currently visible (collapsed folders stay untouched)
+      document.querySelectorAll('#jobsTbl tbody tr').forEach(tr => {
+        if(tr.style.display === 'none') return;
+        const cb = tr.querySelector('.jobSel');
+        if(cb) cb.checked = el.checked;
+      });
+      updateSelCount();
+    }
+    async function runSelected(){
+      if(!CAN_WRITE) return;
+      const ids = selectedJobIds();
+      if(!ids.length) return;
+      if(!confirm(`Run ${ids.length} selected job(s) now?`)) return;
+
+      const btn = document.getElementById('btnRunSelected');
+      const orig = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+      try{
+        const fd = new FormData();
+        fd.append('job_ids', ids.join(','));
+        const r = await fetch('/jobs/run-bulk', { method:'POST', body: fd });
+        if(!r.ok){ alert('Bulk run failed: ' + await errText(r)); return; }
+        const d = await r.json();
+        let msg = `Started ${d.started} job(s).`;
+        if(d.skipped) msg += ` Skipped ${d.skipped}.`;
+        alert(msg);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+        setTimeout(reloadJobs, 800);
+      }
     }
     async function duplicateJob(id){
       if(!CAN_WRITE) return;
@@ -849,6 +930,7 @@
 
       document.getElementById('editThresholdRed').value = j.threshold_red ?? '';
       document.getElementById('editThresholdYellow').value = j.threshold_yellow ?? '';
+      document.getElementById('editThresholdDirection').value = j.threshold_direction || 'above';
 
       toggleEditType();
       editModal.classList.add('show');
@@ -886,6 +968,7 @@
       fd.append('extra_labels', document.getElementById('editExtraLabels').value);
       fd.append('threshold_red', document.getElementById('editThresholdRed').value.trim());
       fd.append('threshold_yellow', document.getElementById('editThresholdYellow').value.trim());
+      fd.append('threshold_direction', document.getElementById('editThresholdDirection').value);
 
       if(document.getElementById('editType').value === 'shell'){
         fd.append('command', document.getElementById('editCommand').value);
@@ -1474,6 +1557,9 @@
     window.reloadJobs = reloadJobs;
     window.toggleJob = toggleJob;
     window.runNow = runNow;
+    window.runSelected = runSelected;
+    window.updateSelCount = updateSelCount;
+    window.toggleSelectAll = toggleSelectAll;
     window.duplicateJob = duplicateJob;
     window.delJob = delJob;
     window.openEdit = openEdit;
