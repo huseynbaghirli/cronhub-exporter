@@ -84,6 +84,7 @@
       <button id="btnUsers" class="iconbtn" type="button" onclick="openUsers()" title="Users" style="display:none">👤 Users</button>
 
       <button id="btnSshKey" class="iconbtn" type="button" onclick="openSshKey()" title="SSH Key" style="display:none">🔑 SSH Key</button>
+      <button id="btnGitlab" class="iconbtn" type="button" onclick="openGitlab()" title="GitLab sync" style="display:none">🦊 GitLab</button>
 
       <button id="themeToggle" class="iconbtn themeToggle" aria-label="Toggle theme" title="Toggle dark mode" type="button">
         <span id="themeIcon" class="icon">🌙</span><span id="themeText">Dark</span>
@@ -504,6 +505,57 @@
         </thead>
         <tbody></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- GITLAB SYNC MODAL -->
+  <div id="gitlabModal" class="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 style="margin:0">🦊 GitLab sync</h3>
+        <button class="iconbtn" type="button" onclick="closeGitlab()" title="Close">✖</button>
+      </div>
+
+      <div class="muted" style="margin-bottom:14px;line-height:1.55">
+        Every job is mirrored into the repo as one JSON file per job, under
+        <code id="glPrefix">jobs</code>/&lt;tenant&gt;/&lt;folder&gt;/&lt;name&gt;.json.
+        Creating, editing, duplicating or deleting a job here commits the change automatically,
+        authored by whoever made it. Edit a file in GitLab and press <b>Pull</b> to bring it back.
+      </div>
+
+      <div class="row" style="margin-bottom:14px">
+        <div class="kv" style="flex:1;min-width:180px">
+          <label>Status</label>
+          <div id="glStatus">-</div>
+        </div>
+        <div class="kv" style="flex:1;min-width:180px">
+          <label>Project</label>
+          <div id="glProject" class="muted">-</div>
+        </div>
+        <div class="kv" style="flex:1;min-width:120px">
+          <label>Branch</label>
+          <div id="glBranch" class="muted">-</div>
+        </div>
+      </div>
+
+      <div id="glDisabledHint" class="muted" style="display:none;margin-bottom:12px">
+        Not configured. Set <code>CRONHUB_GITLAB_ENABLED=true</code>, <code>CRONHUB_GITLAB_PROJECT_ID</code>
+        and <code>CRONHUB_GITLAB_TOKEN</code> in the environment, then restart.
+      </div>
+
+      <div class="row" style="align-items:center;gap:10px;margin-bottom:12px">
+        <button type="button" id="glPushBtn" onclick="gitlabPush()">⬆️ Push all to GitLab</button>
+        <button type="button" id="glPullBtn" class="iconbtn" onclick="gitlabPull(false)">⬇️ Pull from GitLab</button>
+        <button type="button" id="glPullPruneBtn" class="iconbtn" onclick="gitlabPull(true)"
+                title="Also delete jobs that no longer exist in the repo">⬇️ Pull + prune</button>
+      </div>
+
+      <div class="muted" style="margin-bottom:10px">
+        <b>Pull</b> creates and updates jobs from the repo but never deletes.
+        <b>Pull + prune</b> also removes jobs whose file is gone from the repo — that deletes live jobs, so use it deliberately.
+      </div>
+
+      <pre id="glResult" style="margin:0;max-height:240px;overflow:auto">-</pre>
     </div>
   </div>
 
@@ -1484,6 +1536,8 @@
         if (btnUsers) btnUsers.style.display = CAN_AUDIT ? 'inline-block' : 'none';
         const btnSshKey = document.getElementById('btnSshKey');
         if (btnSshKey) btnSshKey.style.display = CAN_AUDIT ? 'inline-block' : 'none';
+        const btnGitlab = document.getElementById('btnGitlab');
+        if (btnGitlab) btnGitlab.style.display = CAN_AUDIT ? 'inline-block' : 'none';
         const btnExportJobs = document.getElementById('btnExportJobs');
         if (btnExportJobs) btnExportJobs.style.display = CAN_AUDIT ? 'inline-block' : 'none';
         const btnImportJobs = document.getElementById('btnImportJobs');
@@ -1588,6 +1642,63 @@
     window.openUsers = openUsers;
     window.closeUsers = closeUsers;
     window.revokeAccess = revokeAccess;
+    /* GITLAB SYNC */
+    async function openGitlab(){
+      if(ROLE !== 'admin') return;
+      document.getElementById('gitlabModal').classList.add('show');
+      document.getElementById('glResult').textContent = '-';
+      try{
+        const r = await fetch('/admin/gitlab/status');
+        if(!r.ok){ document.getElementById('glStatus').textContent = 'error'; return; }
+        const d = await r.json();
+        document.getElementById('glStatus').innerHTML = d.enabled
+          ? '<span class="tag" style="background:#dcfce7;color:#166534">enabled</span>'
+          : '<span class="tag">disabled</span>';
+        document.getElementById('glProject').textContent = d.project_id ? (d.url + ' #' + d.project_id) : '-';
+        document.getElementById('glBranch').textContent = d.branch || '-';
+        document.getElementById('glPrefix').textContent = d.path_prefix || '';
+        document.getElementById('glDisabledHint').style.display = d.enabled ? 'none' : 'block';
+        for(const id of ['glPushBtn','glPullBtn','glPullPruneBtn']){
+          document.getElementById(id).disabled = !d.enabled;
+        }
+      }catch(e){
+        document.getElementById('glStatus').textContent = 'error: ' + e;
+      }
+    }
+    function closeGitlab(){ document.getElementById('gitlabModal').classList.remove('show'); }
+
+    async function gitlabPush(){
+      if(ROLE !== 'admin') return;
+      if(!confirm('Push every job to GitLab as one commit?')) return;
+      const out = document.getElementById('glResult');
+      out.textContent = 'Pushing...';
+      try{
+        const r = await fetch('/admin/gitlab/push', { method:'POST' });
+        const t = await r.text();
+        out.textContent = r.ok ? t : ('Failed: ' + t);
+      }catch(e){ out.textContent = 'Failed: ' + e; }
+    }
+
+    async function gitlabPull(prune){
+      if(ROLE !== 'admin') return;
+      const warn = prune
+        ? 'Pull from GitLab AND DELETE any job whose file is missing from the repo. Continue?'
+        : 'Pull job definitions from GitLab? Existing jobs will be updated to match the repo.';
+      if(!confirm(warn)) return;
+      const out = document.getElementById('glResult');
+      out.textContent = 'Pulling...';
+      try{
+        const r = await fetch('/admin/gitlab/pull' + (prune ? '?prune=1' : ''), { method:'POST' });
+        const t = await r.text();
+        out.textContent = r.ok ? t : ('Failed: ' + t);
+        if(r.ok) reloadJobs();
+      }catch(e){ out.textContent = 'Failed: ' + e; }
+    }
+
+    window.openGitlab = openGitlab;
+    window.closeGitlab = closeGitlab;
+    window.gitlabPush = gitlabPush;
+    window.gitlabPull = gitlabPull;
     window.openSshKey = openSshKey;
     window.closeSshKey = closeSshKey;
     window.updateSshCommands = updateSshCommands;

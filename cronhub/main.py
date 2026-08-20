@@ -7,6 +7,7 @@ from .routes import auth, jobs, ui
 from .routes import admin_export  # yeni
 from .routes import users       # əgər users route da əlavə etmisənsə
 from .routes import ssh_key
+from .routes import gitlab_sync
 
 from .scheduler.history import init_db
 from .scheduler.executor import init_scheduler
@@ -21,6 +22,7 @@ app.include_router(ui.router)
 app.include_router(admin_export.router)
 app.include_router(users.router)
 app.include_router(ssh_key.router)
+app.include_router(gitlab_sync.router)
 
 @app.on_event("startup")
 async def on_startup():

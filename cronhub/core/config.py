@@ -89,3 +89,15 @@ middleware = [
     Middleware(SessionMiddleware, secret_key=SECRET_KEY, same_site="lax"),
     Middleware(AuthRequiredMiddleware),
 ]
+
+
+# --- GitLab GitOps sync ---
+# Jobs are mirrored into a GitLab repo as one JSON file per job, so they can be
+# reviewed/edited from either side. Disabled unless a project id + token are set.
+GITLAB_ENABLED = os.getenv("CRONHUB_GITLAB_ENABLED", "false").lower() == "true"
+GITLAB_URL = os.getenv("CRONHUB_GITLAB_URL", "https://gitlab.com").rstrip("/")
+GITLAB_PROJECT_ID = os.getenv("CRONHUB_GITLAB_PROJECT_ID", "")
+GITLAB_TOKEN = os.getenv("CRONHUB_GITLAB_TOKEN", "")
+GITLAB_BRANCH = os.getenv("CRONHUB_GITLAB_BRANCH", "main")
+GITLAB_PATH_PREFIX = os.getenv("CRONHUB_GITLAB_PATH_PREFIX", "jobs").strip("/")
+GITLAB_TIMEOUT = float(os.getenv("CRONHUB_GITLAB_TIMEOUT", "15"))

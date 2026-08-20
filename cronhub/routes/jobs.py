@@ -17,6 +17,7 @@ from ..scheduler.history import history_select, last_results_select
 from ..scheduler.audit import audit_insert, audit_list
 from ..scheduler.tenant_access import tenant_access_delete_tenant
 from ..scheduler.job_seq import next_job_seq
+from ..core import gitlab
 
 router = APIRouter()
 
@@ -116,6 +117,8 @@ IMPORTANT_AUDIT_ACTIONS = {
     "job.duplicate",
     "tenant.delete",
     "jobs.import",
+    "gitlab.push",
+    "gitlab.pull",
 }
 
 
@@ -809,7 +812,11 @@ def create_job(
     )
 
     _audit(request, "job.create", tenant=tenant, target_type="job", target_id=job_id, ok=True, after=cfg)
-    return {"ok": True, "id": job_id}
+
+    actor, _at, actor_email, _ip, _ua = _actor_info(request)
+    git = gitlab.push_job(cfg, "create", actor, actor_email)
+
+    return {"ok": True, "id": job_id, "gitlab": git}
 
 
 @router.put("/jobs/{job_id}")
@@ -942,7 +949,11 @@ def update_job(
         after=cfg,
     )
 
-    return {"ok": True, "id": job_id, "name": cfg.get("name"), "metrics_enabled": bool(cfg.get("metrics_enabled", False))}
+    actor, _at, actor_email, _ip, _ua = _actor_info(request)
+    git = gitlab.push_job(cfg, "update", actor, actor_email, old_cfg=before_cfg)
+
+    return {"ok": True, "id": job_id, "name": cfg.get("name"),
+            "metrics_enabled": bool(cfg.get("metrics_enabled", False)), "gitlab": git}
 
 
 @router.post("/jobs/{job_id}/metrics/{state}")
@@ -1100,7 +1111,11 @@ def duplicate_job(request: Request, job_id: str):
         after=new_cfg,
         meta={"duplicated_from": job_id},
     )
-    return {"ok": True, "id": new_id}
+
+    actor, _at, actor_email, _ip, _ua = _actor_info(request)
+    git = gitlab.push_job(new_cfg, "create", actor, actor_email)
+
+    return {"ok": True, "id": new_id, "gitlab": git}
 
 
 @router.post("/jobs/{job_id}/pause")
@@ -1151,7 +1166,11 @@ def delete_job(request: Request, job_id: str):
     exec_mod.LAST_RESULTS.pop(job_id, None)
 
     _audit(request, "job.delete", tenant=tenant, target_type="job", target_id=job_id, ok=True, before=cfg_before)
-    return {"ok": True}
+
+    actor, _at, actor_email, _ip, _ua = _actor_info(request)
+    git = gitlab.delete_job(cfg_before, actor, actor_email)
+
+    return {"ok": True, "gitlab": git}
 
 
 @router.get("/jobs/{job_id}/history")
