@@ -155,6 +155,67 @@ def _commit(actions: list[dict], message: str, actor: str, actor_email: str,
     return r.json()
 
 
+BOOTSTRAP_README = """# CronHub jobs
+
+This repository mirrors CronHub's job definitions.
+
+Each tenant lives on its own branch (`tenant/<slug>`). Inside a tenant branch:
+
+- `.cronhub/tenant.json` holds the exact tenant name (branch names are slugs,
+  which is lossy, so the real name is kept here).
+- job definitions are one JSON file each, under the configured path prefix:
+  `<prefix>/<folder>/<job name>.json`.
+
+Edit a job file and CronHub picks the change up on its next pull. Creating a
+`tenant/<slug>` branch here makes that tenant appear in CronHub.
+
+This branch is only the starting point new tenant branches are forked from.
+"""
+
+
+def project_default_branch() -> str | None:
+    """The repo's own default branch, used as a fallback when the configured
+    base branch doesn't exist under that name."""
+    r = _request("GET", _api(""))
+    if r.status_code != 200:
+        return None
+    try:
+        return (r.json() or {}).get("default_branch") or None
+    except Exception:
+        return None
+
+
+def ensure_base_branch(actor: str = "cronhub", actor_email: str = "") -> str:
+    """Returns a branch that tenant branches can be forked from, creating it if
+    the repository is still empty.
+
+    A brand-new GitLab project has no commits at all, so `main` doesn't exist
+    yet and GitLab rejects any commit that tries to start from it with
+    "You can only create or edit files when you are on a branch". The first
+    commit has to be made without a start_branch.
+    """
+    if branch_exists(GITLAB_BRANCH):
+        return GITLAB_BRANCH
+
+    # Configured base is missing - maybe the repo just names it differently.
+    default = project_default_branch()
+    if default and default != GITLAB_BRANCH and branch_exists(default):
+        logger.warning(
+            "[cronhub] gitlab branch %r not found, forking tenants from the "
+            "project default %r instead", GITLAB_BRANCH, default,
+        )
+        return default
+
+    # Empty repository: seed it with an initial commit (no start_branch).
+    _commit(
+        [{"action": "create", "file_path": "README.md", "content": BOOTSTRAP_README}],
+        "chore: initialize CronHub job repository",
+        actor, actor_email, GITLAB_BRANCH,
+    )
+    logger.warning("[cronhub] gitlab initialized empty repository on %r", GITLAB_BRANCH)
+    return GITLAB_BRANCH
+
+
 # ---------------------------------------------------------------- tenants ---
 
 def list_branches() -> list[str]:
@@ -224,11 +285,12 @@ def ensure_tenant_branch(tenant: str, actor: str = "cronhub",
         if branch_exists(branch):
             return {"ok": True, "branch": branch, "created": False}
 
+        base = ensure_base_branch(actor, actor_email)
         manifest = json.dumps({"tenant": tenant}, ensure_ascii=False, indent=2) + "\n"
         _commit(
             [{"action": "create", "file_path": TENANT_MANIFEST, "content": manifest}],
             f"tenant: create {tenant} by {actor}\n\nActor:  {actor}\nTenant: {tenant}\n",
-            actor, actor_email, branch, start_branch=GITLAB_BRANCH,
+            actor, actor_email, branch, start_branch=base,
         )
         logger.info("[cronhub] gitlab created tenant branch %s", branch)
         return {"ok": True, "branch": branch, "created": True}
