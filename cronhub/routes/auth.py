@@ -8,6 +8,8 @@ from authlib.integrations.starlette_client import OAuth
 from authlib.integrations.base_client.errors import OAuthError
 
 from ..scheduler.audit import audit_insert
+from ..scheduler.tenants import tenant_register
+from ..core import gitlab
 from ..scheduler.users import users_upsert
 from ..scheduler.tenant_access import tenant_access_list_for_user
 
@@ -303,11 +305,23 @@ async def set_tenant(request: Request, tenant: str = Form(...)):
             return JSONResponse({"ok": False, "error": "no allowed tenants"}, status_code=403)
         if tenant not in allowed:
             return JSONResponse({"ok": False, "error": "tenant not allowed"}, status_code=403)
-    elif tenant not in allowed:
+    gitlab_res = None
+    if is_admin and tenant not in allowed:
         # Admins can create a brand-new tenant simply by switching to it.
         allowed = allowed + [tenant]
         user["allowed_tenants"] = allowed
         request.session["user"] = user
+
+    if is_admin:
+        # Registering is idempotent; it also covers a tenant that already
+        # existed only implicitly (carried by jobs) and was never recorded.
+        is_new = tenant_register(tenant, source="cronhub")
+        if is_new and gitlab.is_enabled():
+            actor_name = (user.get("display_name") or user.get("preferred_username")
+                          or user.get("email") or "cronhub") if isinstance(user, dict) else "cronhub"
+            gitlab_res = gitlab.ensure_tenant_branch(
+                tenant, actor_name, (user.get("email") or "") if isinstance(user, dict) else ""
+            )
 
     old = request.session.get("active_tenant") or DEFAULT_TENANT
     request.session["active_tenant"] = tenant
@@ -340,7 +354,10 @@ async def set_tenant(request: Request, tenant: str = Form(...)):
         meta={"allowed": allowed},
     )
 
-    return {"ok": True, "active_tenant": tenant, "role": effective_role_for_tenant(user, tenant)}
+    out = {"ok": True, "active_tenant": tenant, "role": effective_role_for_tenant(user, tenant)}
+    if gitlab_res is not None:
+        out["gitlab"] = gitlab_res
+    return out
 
 
 @router.get("/logout")
