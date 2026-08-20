@@ -517,10 +517,11 @@
       </div>
 
       <div class="muted" style="margin-bottom:14px;line-height:1.55">
-        Every job is mirrored into the repo as one JSON file per job, under
-        <code id="glPrefix">jobs</code>/&lt;tenant&gt;/&lt;folder&gt;/&lt;name&gt;.json.
+        Each tenant is its own branch (<code id="glBranchPrefix">tenant/</code>&lt;tenant&gt;), and inside it
+        every job is one JSON file at <code id="glPrefix">jobs</code>/&lt;folder&gt;/&lt;name&gt;.json.
         Creating, editing, duplicating or deleting a job here commits the change automatically,
-        authored by whoever made it. Edit a file in GitLab and press <b>Pull</b> to bring it back.
+        authored by whoever made it. Create a tenant and its branch appears; create a tenant branch
+        in GitLab and <b>Pull</b> brings the tenant back here.
       </div>
 
       <div class="row" style="margin-bottom:14px">
@@ -533,8 +534,15 @@
           <div id="glProject" class="muted">-</div>
         </div>
         <div class="kv" style="flex:1;min-width:120px">
-          <label>Branch</label>
+          <label>Base branch</label>
           <div id="glBranch" class="muted">-</div>
+        </div>
+      </div>
+
+      <div class="row" style="margin-bottom:14px">
+        <div class="kv" style="flex:1">
+          <label>Tenant branches in the repo</label>
+          <div id="glTenants" class="muted">-</div>
         </div>
       </div>
 
@@ -1655,8 +1663,17 @@
           ? '<span class="tag" style="background:#dcfce7;color:#166534">enabled</span>'
           : '<span class="tag">disabled</span>';
         document.getElementById('glProject').textContent = d.project_id ? (d.url + ' #' + d.project_id) : '-';
-        document.getElementById('glBranch').textContent = d.branch || '-';
+        document.getElementById('glBranch').textContent = d.base_branch || '-';
         document.getElementById('glPrefix').textContent = d.path_prefix || '';
+        const bp = document.getElementById('glBranchPrefix');
+        if(bp) bp.textContent = d.branch_prefix || '';
+        const tb = d.tenant_branches || {};
+        const names = Object.keys(tb).sort();
+        document.getElementById('glTenants').innerHTML = d.tenant_branches_error
+          ? ('error: ' + d.tenant_branches_error)
+          : (names.length
+              ? names.map(n => `<span class="tag" style="margin-right:6px">${n} → ${tb[n]}</span>`).join('')
+              : 'none yet');
         document.getElementById('glDisabledHint').style.display = d.enabled ? 'none' : 'block';
         for(const id of ['glPushBtn','glPullBtn','glPullPruneBtn']){
           document.getElementById(id).disabled = !d.enabled;

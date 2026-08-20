@@ -98,6 +98,9 @@ GITLAB_ENABLED = os.getenv("CRONHUB_GITLAB_ENABLED", "false").lower() == "true"
 GITLAB_URL = os.getenv("CRONHUB_GITLAB_URL", "https://gitlab.com").rstrip("/")
 GITLAB_PROJECT_ID = os.getenv("CRONHUB_GITLAB_PROJECT_ID", "")
 GITLAB_TOKEN = os.getenv("CRONHUB_GITLAB_TOKEN", "")
+# Base branch that new tenant branches are forked from.
 GITLAB_BRANCH = os.getenv("CRONHUB_GITLAB_BRANCH", "main")
+# Each tenant lives on its own branch: <prefix><tenant-slug>
+GITLAB_BRANCH_PREFIX = os.getenv("CRONHUB_GITLAB_BRANCH_PREFIX", "tenant/")
 GITLAB_PATH_PREFIX = os.getenv("CRONHUB_GITLAB_PATH_PREFIX", "jobs").strip("/")
 GITLAB_TIMEOUT = float(os.getenv("CRONHUB_GITLAB_TIMEOUT", "15"))

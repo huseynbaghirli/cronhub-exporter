@@ -16,6 +16,7 @@ from ..scheduler import executor as exec_mod
 from ..scheduler.history import history_select, last_results_select
 from ..scheduler.audit import audit_insert, audit_list
 from ..scheduler.tenant_access import tenant_access_delete_tenant
+from ..scheduler.tenants import tenant_delete, tenant_list, tenant_register
 from ..scheduler.job_seq import next_job_seq
 from ..core import gitlab
 
@@ -327,6 +328,9 @@ def list_jobs(request: Request):
 @router.get("/tenants")
 def list_tenants(request: Request):
     tenants = {DEFAULT_TENANT}
+    # Registered tenants (incl. ones that arrived as GitLab branches) count
+    # even before any job carries them.
+    tenants.update(tenant_list())
 
     jobs = exec_mod.scheduler.get_jobs() if exec_mod.scheduler else []
     for j in jobs:
@@ -343,7 +347,7 @@ def list_tenants(request: Request):
 
 
 @router.delete("/tenants/{tenant}")
-def delete_tenant(request: Request, tenant: str):
+def delete_tenant(request: Request, tenant: str, delete_branch: str = Query(None)):
     _require_admin(request)
 
     tenant = (tenant or "").strip()
@@ -359,6 +363,7 @@ def delete_tenant(request: Request, tenant: str):
         exec_mod.LAST_RESULTS.pop(job_id, None)
 
     tenant_access_delete_tenant(tenant)
+    tenant_delete(tenant)
 
     user = request.session.get("user") or {}
     if isinstance(user, dict):
@@ -386,7 +391,22 @@ def delete_tenant(request: Request, tenant: str):
         meta={"deleted_job_count": len(to_remove)},
     )
 
-    return {"ok": True, "deleted_jobs": len(to_remove), "active_tenant": new_active}
+    out = {"ok": True, "deleted_jobs": len(to_remove), "active_tenant": new_active}
+
+    # The tenant's GitLab branch is kept unless explicitly asked for - a branch
+    # carries history. But leaving it means the next pull recreates the tenant,
+    # so say so rather than letting that surprise anyone.
+    if gitlab.is_enabled():
+        if str(delete_branch or "").strip().lower() in ("1", "true", "on", "yes"):
+            out["gitlab"] = gitlab.delete_tenant_branch(tenant)
+        else:
+            out["gitlab"] = {
+                "ok": True,
+                "branch_kept": gitlab.branch_for_tenant(tenant),
+                "note": "branch left in GitLab; a pull will recreate this tenant",
+            }
+
+    return out
 
 
 @router.get("/admin/export/jobs.json")
