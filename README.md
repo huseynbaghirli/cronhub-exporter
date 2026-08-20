@@ -86,12 +86,12 @@ automatically. The commit is authored by the CronHub user who made it and says
 what changed:
 
 ```
-update: Avis/Reports/sql-count #12 by huseyn
+update: acme/reports/sql-count #12 by jdoe
 
 Action: update
-Actor:  huseyn
-Tenant: Avis
-Folder: Reports
+Actor:  jdoe
+Tenant: acme
+Folder: reports
 Job:    sql-count #12
 ```
 
